@@ -2,8 +2,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { matchIngredientNutrition } from "./nutrition/match";
 import type { ParsedRecipe } from "./types";
 
-// Resolve the single household id. Works with both the service client (bypasses
-// RLS, returns the one row) and a user client (RLS returns only their row).
+// Resolve the single household id, creating it on first use if it doesn't
+// exist yet. Works with both the service client (bypasses RLS, returns/creates
+// the one row) and a user client (RLS returns only their row).
+//
+// Historically the household row was bootstrapped by a `handle_new_user()`
+// Postgres trigger that fired on the first Supabase Auth signup (see
+// supabase/migrations/0001_init.sql). Task #24 replaced per-user Supabase
+// Auth with a single shared PIN, so that trigger never fires anymore — this
+// function now does the same bootstrap explicitly instead, so a brand-new
+// database still "just works" the first time a recipe is saved.
 export async function getHouseholdId(
   supabase: SupabaseClient,
 ): Promise<string | null> {
@@ -13,7 +21,15 @@ export async function getHouseholdId(
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  return data?.id ?? null;
+  if (data?.id) return data.id;
+
+  const { data: created, error } = await supabase
+    .from("household")
+    .insert({ name: "Home" })
+    .select("id")
+    .single();
+  if (error || !created) return null;
+  return created.id;
 }
 
 // Persist a parsed recipe and its ingredients/steps. Returns the new recipe id.

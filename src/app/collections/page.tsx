@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { BottomNav } from "@/components/BottomNav";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { createCollectionAction } from "./actions";
 
 interface CollectionRow {
@@ -10,7 +10,7 @@ interface CollectionRow {
 }
 
 export default async function CollectionsPage() {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: collections } = await supabase
     .from("collection")

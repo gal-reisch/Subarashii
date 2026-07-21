@@ -3,14 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getHouseholdId } from "@/lib/recipes";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
+// No per-user auth check anymore (task #24 PIN-auth migration) — the proxy
+// already gates every non-public route behind the shared-PIN session cookie,
+// so any Server Action reachable from the UI is already behind that gate.
 async function requireHousehold() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const supabase = createServiceClient();
   const householdId = await getHouseholdId(supabase);
   if (!householdId) throw new Error("No household found");
   return { supabase, householdId };

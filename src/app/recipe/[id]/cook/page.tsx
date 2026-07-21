@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { CookMode } from "@/components/cook/CookMode";
 import type { TimerPreset } from "@/lib/types";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export default async function CookPage({
   params,
@@ -9,7 +9,7 @@ export default async function CookPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: recipe } = await supabase
     .from("recipe")

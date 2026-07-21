@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
 import { dirFor } from "@/lib/lang";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   deleteCollectionAction,
   removeRecipeFromCollectionAction,
@@ -26,7 +26,7 @@ export default async function CollectionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: collection } = await supabase
     .from("collection")

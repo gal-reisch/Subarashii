@@ -2,22 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { detectLang, type Lang } from "@/lib/lang";
 import { parseInput } from "@/lib/parser";
 import { classifyStepKind } from "@/lib/parser/stepKind";
 import { getHouseholdId, saveParsedRecipe } from "@/lib/recipes";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { SESSION_COOKIE } from "@/lib/session";
 import { detectTimerSeconds } from "@/lib/timers";
 import type { ParsedRecipe } from "@/lib/types";
-
-async function requireUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  return { supabase, user };
-}
 
 function majorityLang(texts: string[]): Lang | null {
   if (texts.length === 0) return null;
@@ -30,19 +23,22 @@ export async function addFromUrlAction(formData: FormData) {
   const url = String(formData.get("url") ?? "").trim();
   if (!url) redirect("/add?error=empty");
 
-  const { supabase, user } = await requireUser();
+  // No per-user identity anymore (task #24 PIN-auth migration) — the
+  // service-role client bypasses RLS entirely and `createdBy` is nullable,
+  // same pattern already used by /api/ingest.
+  const supabase = createServiceClient();
   const parsed = await parseInput({ url });
   const householdId = await getHouseholdId(supabase);
   if (!householdId) throw new Error("No household found");
 
-  const { id } = await saveParsedRecipe(supabase, householdId, parsed, user.id);
+  const { id } = await saveParsedRecipe(supabase, householdId, parsed, null);
   revalidatePath("/");
   redirect(`/recipe/${id}`);
 }
 
 // Save a hand-entered recipe.
 export async function addManualAction(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const supabase = createServiceClient();
 
   const title = String(formData.get("title") ?? "").trim() || "Untitled recipe";
   const servingsRaw = String(formData.get("servings") ?? "").trim();
@@ -87,7 +83,7 @@ export async function addManualAction(formData: FormData) {
   const householdId = await getHouseholdId(supabase);
   if (!householdId) throw new Error("No household found");
 
-  const { id } = await saveParsedRecipe(supabase, householdId, parsed, user.id);
+  const { id } = await saveParsedRecipe(supabase, householdId, parsed, null);
   revalidatePath("/");
   redirect(`/recipe/${id}`);
 }
@@ -101,7 +97,7 @@ export async function toggleFavoriteAction(formData: FormData) {
   const isFavorite = formData.get("is_favorite") === "true";
   if (!recipeId) return;
 
-  const { supabase } = await requireUser();
+  const supabase = createServiceClient();
   await supabase.from("recipe").update({ is_favorite: !isFavorite }).eq("id", recipeId);
   revalidatePath(`/recipe/${recipeId}`);
   revalidatePath("/favorites");
@@ -109,7 +105,7 @@ export async function toggleFavoriteAction(formData: FormData) {
 }
 
 export async function signOutAction() {
-  const supabase = await createClient();
-  await supabase.auth.signOut();
+  const cookieStore = await cookies();
+  cookieStore.delete(SESSION_COOKIE);
   redirect("/login");
 }

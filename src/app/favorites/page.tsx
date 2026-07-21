@@ -2,7 +2,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { LinkButton } from "@/components/Button";
 import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
 import { computeNutritionTotals, getNutritionFlags } from "@/lib/nutritionCalc";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // Favorites view (task #24) — backs the Figma nav's dedicated "Favorites"
 // tab. Same card grid as the home page, filtered to recipes with the
@@ -29,7 +29,7 @@ interface RecipeRow {
 }
 
 export default async function FavoritesPage() {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("recipe")
     .select(

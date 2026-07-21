@@ -6,8 +6,8 @@ free plan or Vercel's Hobby plan.
 
 You'll do three things:
 
-1. Create a free Supabase project (the database + login + file storage).
-2. Put its keys into a local `.env.local` file.
+1. Create a free Supabase project (the database + file storage).
+2. Put its keys, plus a shared PIN, into a local `.env.local` file.
 3. Run one SQL migration to create the tables.
 
 Then you can run the app locally, and later deploy it to the web.
@@ -29,12 +29,14 @@ Then you can run the app locally, and later deploy it to the web.
 In the Supabase dashboard for your project:
 
 1. Go to **Project Settings** (gear icon) → **API**.
-2. You'll need three values:
+2. You'll need two values:
    - **Project URL** → this is `NEXT_PUBLIC_SUPABASE_URL`
-   - **`anon` `public` key** → this is `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - **`service_role` `secret` key** → this is `SUPABASE_SERVICE_ROLE_KEY`
      (Click *Reveal* to see it. **This one is secret** — it can read/write
      everything. Never share it or put it in the browser.)
+
+The app signs in with a shared PIN rather than a Supabase user account (see
+step 5), so the `anon` `public` key isn't used anywhere.
 
 ## 3. Create `.env.local`
 
@@ -48,10 +50,9 @@ Then open `.env.local` and paste your values. It should look like:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...            (the anon public key)
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...                (the service_role secret key)
+APP_PIN=                                               (see step 5)
 INGEST_TOKEN=                                          (see next step)
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
 ```
 
 Generate the `INGEST_TOKEN` (a secret password the iPhone Shortcut uses to save
@@ -75,21 +76,16 @@ This creates all the tables (recipes, ingredients, steps, timers, etc.).
 
 That's it — the database is ready.
 
-## 5. Turn on email login (magic links)
+## 5. Choose a shared PIN
 
-By default Supabase already has email magic-links enabled. Two quick checks:
+There's no per-person login — the app is gated behind one shared PIN that both
+of you know, stored as `APP_PIN` in `.env.local`. Pick anything (a short
+numeric code is fine, e.g. `4271`) and paste it in. Changing `APP_PIN` later
+instantly signs everyone out.
 
-1. **Authentication** → **Providers** → make sure **Email** is enabled.
-2. **Authentication** → **URL Configuration**:
-   - **Site URL:** `http://localhost:3000` (change to your real site later).
-   - **Redirect URLs:** add `http://localhost:3000/auth/callback`.
-
-The first person to log in automatically becomes the household. When Ella logs in
-with the same app, she joins the same household automatically — you'll both see the
-same recipe box.
-
-> On the free tier Supabase sends a limited number of emails per hour, which is
-> plenty for two people. If a login email is slow, wait a minute and check spam.
+There's only ever one household in the database, created automatically the
+first time a recipe is saved — you and Ella share the same recipe box simply
+by both knowing the same PIN.
 
 ---
 
@@ -107,8 +103,8 @@ Then:
 npm run dev
 ```
 
-Open <http://localhost:3000>. You'll be asked to log in — enter your email, click
-the magic link, and you're in. Try:
+Open <http://localhost:3000>. You'll be asked for the PIN — enter it, and you're in.
+Try:
 
 - **Add → Paste a link** with a recipe URL (e.g. any recipe blog).
 - **Add → Type it in** to enter one by hand.
@@ -121,12 +117,9 @@ Both should show up in "The Box" on the home page.
 
 1. Push this project to a private GitHub repo.
 2. Go to <https://vercel.com>, sign up (free Hobby plan), and **Import** the repo.
-3. In Vercel's project settings → **Environment Variables**, add the same five
-   variables from your `.env.local` (use your real Vercel URL for
-   `NEXT_PUBLIC_SITE_URL`, e.g. `https://subarashii.vercel.app`).
-4. Deploy. Then go back to Supabase → **Authentication** → **URL Configuration**
-   and update the **Site URL** and add `<your-vercel-url>/auth/callback` to the
-   redirect URLs.
+3. In Vercel's project settings → **Environment Variables**, add the same four
+   variables from your `.env.local`.
+4. Deploy — that's it, no Supabase auth configuration to update.
 
 Once it's live, follow **SHORTCUT.md** to set up the iPhone "Save to Subarashii"
 Share Sheet shortcut.
@@ -138,7 +131,7 @@ Share Sheet shortcut.
 | Variable | Where to find it | Secret? |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API → Project URL | no |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon public | no |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role | **yes** |
+| `APP_PIN` | Pick anything — a shared PIN you and Ella both know | **yes** |
 | `INGEST_TOKEN` | `openssl rand -hex 32` | **yes** |
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` locally; Vercel URL in prod | no |

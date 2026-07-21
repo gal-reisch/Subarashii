@@ -7,7 +7,7 @@ import { toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { dirFor } from "@/lib/lang";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 interface Ingredient {
   id: string;
@@ -34,7 +34,7 @@ export default async function RecipePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   const { data: recipe } = await supabase
     .from("recipe")

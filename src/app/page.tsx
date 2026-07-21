@@ -2,7 +2,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { LinkButton } from "@/components/Button";
 import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
 import { computeNutritionTotals, getNutritionFlags } from "@/lib/nutritionCalc";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 // Raw shape of one row from the query below — includes the nested
 // per-ingredient nutrition columns needed to compute each card's calorie
@@ -29,7 +29,7 @@ interface RecipeRow {
 }
 
 export default async function Home() {
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data } = await supabase
     .from("recipe")
     .select(
