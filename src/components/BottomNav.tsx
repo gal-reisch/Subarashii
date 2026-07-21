@@ -73,6 +73,8 @@ export function BottomNav() {
         <Link
           href="/add"
           aria-label="Add Recipe"
+          // See the prefetch comment in NavIcon above — same race, same fix.
+          prefetch={false}
           className="absolute left-1/2 top-0 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-[#fbf5e7] shadow-[0px_10px_24px_rgba(244,166,210,0.5)] transition active:scale-95"
         >
           <PlusIcon />
@@ -97,6 +99,17 @@ function NavIcon({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
+      // Prefetch disabled: Next.js prefetches every viewport <Link> the
+      // instant the nav mounts, which fires 3-4 simultaneous requests
+      // through the auth middleware on load. On Vercel's Edge runtime each
+      // request gets its own isolated Supabase client with no shared
+      // refresh-lock, so those simultaneous requests can race to redeem the
+      // same (one-time-use) refresh token — the losers get treated as
+      // logged-out, redirected to /login, and Next.js caches that bad
+      // redirect per-route, making every tap on that icon replay the stale
+      // login bounce until the cache expires. A 4-route personal nav bar
+      // doesn't need prefetching enough to justify that race.
+      prefetch={false}
       // Every glyph is pink per the Figma nav; the active tab just reads a
       // touch heavier (full-opacity fill + soft pink glow) vs. the ~65%
       // opacity of inactive tabs.
