@@ -1,18 +1,16 @@
-import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
 import { AddForm } from "@/components/AddForm";
-import { AppHeader } from "@/components/AppHeader";
+import { BottomNav } from "@/components/BottomNav";
 
 export default function AddPage() {
   return (
     <div className="min-h-full">
-      <AppHeader />
-      <main className="mx-auto max-w-xl px-5 py-6">
-        <Link href="/" className="text-sm text-muted hover:underline">
-          ← Back to the box
-        </Link>
-        <h1 className="mt-4 mb-6 text-3xl font-semibold">Add a recipe</h1>
+      <main className="mx-auto max-w-xl px-5 pb-32 pt-6">
+        <BackButton href="/" />
+        <h1 className="mt-4 mb-6 text-3xl">Add a recipe</h1>
         <AddForm />
       </main>
+      <BottomNav />
     </div>
   );
 }

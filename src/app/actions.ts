@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { detectLang, type Lang } from "@/lib/lang";
 import { parseInput } from "@/lib/parser";
+import { classifyStepKind } from "@/lib/parser/stepKind";
 import { getHouseholdId, saveParsedRecipe } from "@/lib/recipes";
 import { createClient } from "@/lib/supabase/server";
 import { detectTimerSeconds } from "@/lib/timers";
@@ -59,7 +60,11 @@ export async function addManualAction(formData: FormData) {
     .split(/\r?\n/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .map((text) => ({ text, detected_timer_seconds: detectTimerSeconds(text) }));
+    .map((text) => ({
+      text,
+      detected_timer_seconds: detectTimerSeconds(text),
+      kind: classifyStepKind(text),
+    }));
 
   const parsed: ParsedRecipe = {
     title,

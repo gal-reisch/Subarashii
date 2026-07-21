@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AppHeader } from "@/components/AppHeader";
+import { BottomNav } from "@/components/BottomNav";
 import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,9 +14,12 @@ export default async function Home() {
 
   return (
     <div className="min-h-full">
-      <AppHeader />
-      <main className="mx-auto max-w-3xl px-5 py-6">
-        <h1 className="text-3xl font-semibold">Ella&apos;s Box</h1>
+      <main className="mx-auto max-w-3xl px-5 pb-32 pt-8">
+        <h1 className="text-4xl leading-tight">
+          Ella&apos;s
+          <br />
+          Recipe Box
+        </h1>
 
         {recipes.length === 0 ? (
           <EmptyState />
@@ -24,6 +27,7 @@ export default async function Home() {
           <RecipeBrowser recipes={recipes} />
         )}
       </main>
+      <BottomNav />
     </div>
   );
 }
@@ -32,13 +36,13 @@ function EmptyState() {
   return (
     <div className="mt-16 flex flex-col items-center text-center">
       <div className="text-5xl">🍳</div>
-      <h2 className="mt-4 text-xl font-semibold">Your box is empty</h2>
+      <h2 className="mt-4 text-xl">Your box is empty</h2>
       <p className="mt-2 max-w-xs text-sm text-muted">
         Save your first recipe — paste a link, snap a screenshot, or type one in.
       </p>
       <Link
         href="/add"
-        className="mt-6 rounded-full bg-accent px-6 py-3 font-semibold text-accent-ink transition active:scale-95"
+        className="mt-6 rounded-full bg-accent px-6 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] transition active:scale-95"
       >
         + Add a recipe
       </Link>

@@ -19,19 +19,17 @@ export function TimerRail({ presets, timers, onStart, onStop, onAddMinute }: Tim
   const [customOpen, setCustomOpen] = useState(false);
 
   return (
-    <div className="border-t border-border bg-card/60 px-4 py-3">
+    <div className="bg-background px-4 pb-3 pt-2">
       {timers.length > 0 && (
         <div className="mb-3 flex gap-3 overflow-x-auto pb-1">
           {timers.map((t) => (
             <div
               key={t.id}
-              className={`flex min-w-[9.5rem] shrink-0 flex-col rounded-2xl border px-4 py-3 transition ${
-                t.remaining === 0
-                  ? "animate-pulse border-accent bg-accent/15"
-                  : "border-border bg-background"
+              className={`flex min-w-[9.5rem] shrink-0 flex-col rounded-2xl px-4 py-3 shadow-[0px_10px_24px_rgba(0,0,0,0.06)] transition ${
+                t.remaining === 0 ? "animate-pulse bg-accent/15" : "bg-card"
               }`}
             >
-              <span className="truncate text-xs font-semibold uppercase tracking-wide text-muted">
+              <span className="truncate text-xs font-bold uppercase tracking-wide text-muted">
                 {t.label}
               </span>
               <span className="mt-1 font-mono text-2xl font-bold tabular-nums">
@@ -40,14 +38,14 @@ export function TimerRail({ presets, timers, onStart, onStop, onAddMinute }: Tim
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={() => onAddMinute(t.id)}
-                  className="flex-1 rounded-full bg-border px-2 py-2 text-xs font-semibold active:scale-95"
+                  className="flex-1 rounded-full bg-border px-2 py-2 text-xs font-bold active:scale-95"
                   aria-label={`Add one minute to ${t.label}`}
                 >
                   +1 min
                 </button>
                 <button
                   onClick={() => onStop(t.id)}
-                  className="flex-1 rounded-full bg-accent px-2 py-2 text-xs font-semibold text-accent-ink active:scale-95"
+                  className="flex-1 rounded-full bg-accent px-2 py-2 text-xs font-bold text-accent-ink active:scale-95"
                   aria-label={`Stop ${t.label}`}
                 >
                   Stop
@@ -63,14 +61,14 @@ export function TimerRail({ presets, timers, onStart, onStop, onAddMinute }: Tim
           <button
             key={p.id}
             onClick={() => onStart(p.label, p.default_seconds)}
-            className="rounded-full border border-border bg-background px-4 py-2.5 text-sm font-semibold active:scale-95"
+            className="rounded-full bg-card px-4 py-2.5 text-sm font-bold shadow-[0px_6px_16px_rgba(0,0,0,0.06)] active:scale-95"
           >
             {p.label} · {formatClock(p.default_seconds)}
           </button>
         ))}
         <button
           onClick={() => setCustomOpen(true)}
-          className="rounded-full border border-dashed border-accent px-4 py-2.5 text-sm font-semibold text-accent active:scale-95"
+          className="rounded-full bg-accent/10 px-4 py-2.5 text-sm font-bold text-accent active:scale-95"
         >
           + Custom timer
         </button>
@@ -129,19 +127,19 @@ function CustomTimerSheet({
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="Label (e.g. Oven #2)"
-          className="mt-5 w-full rounded-xl border border-border bg-background px-4 py-3 text-center text-base"
+          className="mt-5 w-full rounded-2xl bg-background px-4 py-3 text-center text-base outline-none"
         />
 
         <div className="mt-5 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 rounded-full border border-border py-3 font-semibold active:scale-95"
+            className="flex-1 rounded-full bg-background py-3 font-bold active:scale-95"
           >
             Cancel
           </button>
           <button
             onClick={() => onStart(label.trim() || "Timer", minutes * 60)}
-            className="flex-1 rounded-full bg-accent py-3 font-semibold text-accent-ink active:scale-95"
+            className="flex-1 rounded-full bg-accent py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] active:scale-95"
           >
             Start
           </button>

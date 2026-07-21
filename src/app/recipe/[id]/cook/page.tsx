@@ -23,6 +23,7 @@ export default async function CookPage({
       .from("step")
       .select("id,text,detected_timer_seconds")
       .eq("recipe_id", id)
+      .eq("kind", "instruction")
       .order("position"),
     supabase.from("ingredient").select("id,raw_text").eq("recipe_id", id).order("position"),
     supabase

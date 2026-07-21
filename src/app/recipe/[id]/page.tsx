@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AppHeader } from "@/components/AppHeader";
+import { BackButton } from "@/components/BackButton";
+import { BottomNav } from "@/components/BottomNav";
+import { NutritionChips, type NutritionTotals } from "@/components/NutritionChips";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { dirFor } from "@/lib/lang";
 import { createClient } from "@/lib/supabase/server";
@@ -8,11 +10,61 @@ import { createClient } from "@/lib/supabase/server";
 interface Ingredient {
   id: string;
   raw_text: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  sugar_g: number | null;
+  is_estimated: boolean;
+}
+
+const NUTRITION_KEYS = ["calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"] as const;
+
+// Sums whichever nutrition columns have at least one non-null value across
+// the recipe's ingredients, scales to per-serving, and flags the whole
+// section as "Estimated" if any contributing ingredient used the LLM
+// fallback rather than a Tzameret/USDA match. Returns null when there's no
+// nutrition data at all yet (nothing has been matched or estimated) — the
+// section just doesn't render rather than showing fabricated zeros.
+function computeNutritionTotals(ingredients: Ingredient[], servings: number | null): NutritionTotals | null {
+  const divisor = servings && servings > 0 ? servings : 1;
+  const totals: Record<(typeof NUTRITION_KEYS)[number], number | null> = {
+    calories: null,
+    protein_g: null,
+    carbs_g: null,
+    fat_g: null,
+    fiber_g: null,
+    sugar_g: null,
+  };
+  let anyValue = false;
+  let isEstimated = false;
+
+  for (const key of NUTRITION_KEYS) {
+    let sum = 0;
+    let hasAny = false;
+    for (const ing of ingredients) {
+      const v = ing[key];
+      if (v != null) {
+        sum += v;
+        hasAny = true;
+        if (ing.is_estimated) isEstimated = true;
+      }
+    }
+    if (hasAny) {
+      totals[key] = sum / divisor;
+      anyValue = true;
+    }
+  }
+
+  if (!anyValue) return null;
+  return { ...totals, isEstimated };
 }
 interface Step {
   id: string;
   text: string;
   detected_timer_seconds: number | null;
+  kind: "instruction" | "tip" | "ignored";
 }
 
 export default async function RecipePage({
@@ -32,10 +84,14 @@ export default async function RecipePage({
 
   const [{ data: ingredients }, { data: steps }, { data: collections }, { data: memberships }] =
     await Promise.all([
-      supabase.from("ingredient").select("id,raw_text").eq("recipe_id", id).order("position"),
+      supabase
+        .from("ingredient")
+        .select("id,raw_text,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,is_estimated")
+        .eq("recipe_id", id)
+        .order("position"),
       supabase
         .from("step")
-        .select("id,text,detected_timer_seconds")
+        .select("id,text,detected_timer_seconds,kind")
         .eq("recipe_id", id)
         .order("position"),
       supabase.from("collection").select("id,name").order("sort_order"),
@@ -46,34 +102,36 @@ export default async function RecipePage({
   const stps = (steps ?? []) as Step[];
   const cols = (collections ?? []) as { id: string; name: string }[];
   const memberIds = new Set((memberships ?? []).map((m) => m.collection_id));
+  const nutritionTotals = computeNutritionTotals(ings, recipe.servings);
 
   return (
     <div className="min-h-full">
-      <AppHeader />
-      <main className="mx-auto max-w-2xl px-5 py-6">
-        <Link href="/" className="text-sm text-muted hover:underline">
-          ← Back to the box
-        </Link>
+      <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
+        <div className="flex items-center justify-between">
+          <BackButton href="/" label="Back to the box" />
+        </div>
 
         {recipe.cover_image_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={recipe.cover_image_url}
             alt=""
-            className="mt-4 aspect-[16/10] w-full rounded-2xl object-cover"
+            className="mt-5 aspect-[16/10] w-full rounded-[28px] object-cover shadow-[0px_20px_50px_rgba(0,0,0,0.12)]"
           />
         )}
 
         <h1
           dir={dirFor(recipe.title)}
-          className="mt-5 text-3xl font-semibold leading-tight"
+          className="mt-6 text-center text-3xl leading-tight"
         >
           {recipe.title}
         </h1>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-semibold text-muted">
           {recipe.servings && <span>{recipe.servings} servings</span>}
-          {recipe.total_time_min && <span>{recipe.total_time_min} min</span>}
+          {recipe.total_time_min && (
+            <span className="text-accent">{recipe.total_time_min} min</span>
+          )}
           {recipe.cuisine && <span>{recipe.cuisine}</span>}
           {recipe.source_url && (
             <a
@@ -90,21 +148,21 @@ export default async function RecipePage({
         {(ings.length > 0 || stps.length > 0) && (
           <Link
             href={`/recipe/${recipe.id}/cook`}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-full bg-accent py-4 text-lg font-semibold text-accent-ink transition active:scale-[0.98]"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-accent py-4 text-lg font-bold text-accent-ink shadow-[0px_16px_36px_rgba(191,74,26,0.45)] transition active:scale-[0.98]"
           >
             👩‍🍳 Start Cooking
           </Link>
         )}
 
         {recipe.needs_review && (
-          <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-3 text-sm">
+          <div className="mt-4 rounded-2xl bg-warn-bg p-3 text-sm text-warn-text">
             We couldn&apos;t fully read this one. The link is saved — you can add
             the details yourself.
           </div>
         )}
 
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold text-muted">Shelves</h2>
+        <section className="mt-8">
+          <h2 className="text-[15px] font-bold">Shelves</h2>
           <div className="mt-2 flex flex-wrap gap-2">
             {cols.map((c) => {
               const isMember = memberIds.has(c.id);
@@ -115,10 +173,10 @@ export default async function RecipePage({
                   <input type="hidden" name="is_member" value={String(isMember)} />
                   <button
                     type="submit"
-                    className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
+                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
                       isMember
-                        ? "border-accent bg-accent text-accent-ink"
-                        : "border-border bg-card text-foreground"
+                        ? "bg-accent text-accent-ink"
+                        : "bg-card text-foreground shadow-[0px_4px_14px_rgba(0,0,0,0.06)]"
                     }`}
                   >
                     {isMember ? "✓ " : "+ "}
@@ -133,11 +191,11 @@ export default async function RecipePage({
             <input
               name="name"
               placeholder="New shelf…"
-              className="min-w-0 flex-1 rounded-full border border-dashed border-accent bg-card px-3 py-1.5 text-sm"
+              className="min-w-0 flex-1 rounded-full bg-card px-3 py-1.5 text-sm shadow-[0px_4px_14px_rgba(0,0,0,0.06)] outline-none"
             />
             <button
               type="submit"
-              className="shrink-0 rounded-full border border-dashed border-accent px-3 py-1.5 text-sm font-semibold text-accent active:scale-95"
+              className="shrink-0 rounded-full bg-card px-3 py-1.5 text-sm font-semibold text-accent shadow-[0px_4px_14px_rgba(0,0,0,0.06)] active:scale-95"
             >
               Create
             </button>
@@ -146,13 +204,13 @@ export default async function RecipePage({
 
         {ings.length > 0 && (
           <section className="mt-8">
-            <h2 className="text-xl font-semibold">Ingredients</h2>
+            <h2 className="text-[15px] font-bold">Ingredients</h2>
             <ul className="mt-3 space-y-2">
               {ings.map((ing) => (
                 <li
                   key={ing.id}
                   dir={dirFor(ing.raw_text)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+                  className="rounded-2xl bg-card px-4 py-3 text-sm shadow-[0px_4px_14px_rgba(0,0,0,0.05)]"
                 >
                   {ing.raw_text}
                 </li>
@@ -161,24 +219,88 @@ export default async function RecipePage({
           </section>
         )}
 
-        {stps.length > 0 && (
-          <section className="mt-8">
-            <h2 className="text-xl font-semibold">Steps</h2>
-            <ol className="mt-3 space-y-3">
-              {stps.map((step, i) => (
-                <li key={step.id} className="flex gap-3">
-                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-ink">
-                    {i + 1}
-                  </span>
-                  <p dir={dirFor(step.text)} className="text-[15px] leading-relaxed">
-                    {step.text}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          </section>
-        )}
+        {nutritionTotals && <NutritionChips totals={nutritionTotals} />}
+
+        {stps.length > 0 && (() => {
+          // Only real instructions get numbered. "tip"s are genuine asides
+          // (a serving idea, a use for leftovers) shown right after in a
+          // clearly lower-emphasis style. "ignored" lines are author
+          // cross-promotion the parser is fairly confident isn't part of
+          // this recipe at all — kept out of the way behind a disclosure
+          // rather than deleted, since the classifier is a best-effort guess.
+          const instructions = stps.filter((s) => s.kind === "instruction");
+          const tips = stps.filter((s) => s.kind === "tip");
+          const ignored = stps.filter((s) => s.kind === "ignored");
+
+          return (
+            <section className="mt-8">
+              <h2 className="text-[15px] font-bold">Steps</h2>
+
+              {instructions.length > 0 && (
+                <ol className="mt-3 space-y-3">
+                  {instructions.map((step, i) => (
+                    // dir goes on the flex container itself (not just the
+                    // text) so the number badge and the paragraph both flip
+                    // order for Hebrew — CSS flexbox's "row" axis follows the
+                    // element's own direction, so this alone fixes badge
+                    // placement + alignment.
+                    <li
+                      key={step.id}
+                      dir={dirFor(step.text)}
+                      className="flex gap-3 rounded-2xl bg-card px-4 py-3 shadow-[0px_4px_14px_rgba(0,0,0,0.05)]"
+                    >
+                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-ink">
+                        {i + 1}
+                      </span>
+                      <p className="text-[15px] leading-relaxed">{step.text}</p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {tips.length > 0 && (
+                <ul className="mt-4 space-y-2">
+                  {tips.map((step) => (
+                    <li
+                      key={step.id}
+                      dir={dirFor(step.text)}
+                      className="flex gap-2 rounded-2xl bg-info-bg px-4 py-3"
+                    >
+                      <span aria-hidden className="shrink-0">
+                        💡
+                      </span>
+                      <p className="text-sm italic leading-relaxed text-muted">
+                        {step.text}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {ignored.length > 0 && (
+                <details className="mt-4 text-sm text-muted">
+                  <summary className="cursor-pointer select-none font-semibold">
+                    Show {ignored.length} more line{ignored.length === 1 ? "" : "s"}{" "}
+                    from the original source
+                  </summary>
+                  <ul className="mt-2 space-y-2">
+                    {ignored.map((step) => (
+                      <li
+                        key={step.id}
+                        dir={dirFor(step.text)}
+                        className="rounded-2xl bg-card px-3 py-2 shadow-[0px_4px_14px_rgba(0,0,0,0.05)]"
+                      >
+                        {step.text}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </section>
+          );
+        })()}
       </main>
+      <BottomNav />
     </div>
   );
 }

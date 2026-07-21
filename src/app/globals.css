@@ -1,13 +1,44 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fbf7f0; /* warm cream */
+  --background: #fbf7f0; /* warm cream — dominant neutral, ~70% of the UI */
   --foreground: #2b2420; /* warm ink */
   --card: #ffffff;
   --muted: #8a7f76;
   --border: #ece2d5;
-  --accent: #d9743b; /* persimmon / terracotta */
-  --accent-ink: #ffffff;
+
+  /* Single brand accent, reserved for actionable/primary elements only
+     (CTAs, active nav, links, prices/times) — punchy warm "burnt orange" for
+     a food-app "appetite" feel, tuned to clear WCAG AA (4.5:1) against both
+     --background and --accent-ink so button/link text stays readable at
+     normal weight, not just large bold text. */
+  --accent: #bf4a1a;
+  --accent-ink: #fff8f1;
+
+  /* Secondary semantic hues — used sparingly (small badges/banners only) so
+     they never compete with --accent for "what's tappable". Warm amber reads
+     as "needs attention" without implying an action; sage reads as a calm,
+     informational aside (recipe tips). Also doubles as the "calories" and
+     "carbs" nutrition-chip colors below, so these two hues aren't one-offs. */
+  --warn-bg: #fbeaca;
+  --warn-text: #8a5f12;
+  --info-bg: #e7eee0;
+  --info-text: #4f6144;
+
+  /* Nutrition-chip category palette — pastel, saturated-but-soft color per
+     nutrient, drawn from the drink-tracker reference (each category gets its
+     own tinted card rather than one muted badge style for everything).
+     calories/carbs intentionally reuse --warn/--info above; these four are
+     the net-new hues. Every pair below is verified ≥4.5:1 (WCAG AA, normal
+     text) for its bold text color against its own tinted background. */
+  --cat-protein-bg: #cfe7f8;
+  --cat-protein-text: #1b5a7a;
+  --cat-fat-bg: #e4d9f6;
+  --cat-fat-text: #5a4589;
+  --cat-sugar-bg: #f8d3c7;
+  --cat-sugar-text: #9c3a22;
+  --cat-fiber-bg: #cfeee6;
+  --cat-fiber-text: #1c6b5c;
 }
 
 @theme inline {
@@ -18,18 +49,35 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
-  --font-display: var(--font-display);
+  --color-warn-bg: var(--warn-bg);
+  --color-warn-text: var(--warn-text);
+  --color-info-bg: var(--info-bg);
+  --color-info-text: var(--info-text);
+  --color-cat-protein-bg: var(--cat-protein-bg);
+  --color-cat-protein-text: var(--cat-protein-text);
+  --color-cat-fat-bg: var(--cat-fat-bg);
+  --color-cat-fat-text: var(--cat-fat-text);
+  --color-cat-sugar-bg: var(--cat-sugar-bg);
+  --color-cat-sugar-text: var(--cat-sugar-text);
+  --color-cat-fiber-bg: var(--cat-fiber-bg);
+  --color-cat-fiber-text: var(--cat-fiber-text);
   --font-sans: var(--font-sans);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans), ui-rounded, system-ui, sans-serif;
 }
 
+/* Bold, rounded headlines everywhere — no separate serif/display face.
+   `ui-rounded` is a Safari/WebKit generic that resolves to SF Pro Rounded on
+   Apple devices, leaning closer to the reference look there while degrading
+   gracefully to Nunito elsewhere. */
 h1,
 h2,
 h3 {
-  font-family: var(--font-display), Georgia, "Times New Roman", serif;
+  font-family: var(--font-sans), ui-rounded, system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }

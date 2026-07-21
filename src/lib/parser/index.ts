@@ -3,6 +3,7 @@ import { detectLang, type Lang } from "../lang";
 import { detectTimerSeconds } from "../timers";
 import type { ParsedRecipe, SourceType } from "../types";
 import { extractRecipeFromHtml, type JsonLdRecipe } from "./jsonld";
+import { classifyStepKind } from "./stepKind";
 import { splitFreeText } from "./text";
 
 function detectSourceType(url: string): SourceType {
@@ -32,6 +33,7 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
   const steps = jr.steps.map((text) => ({
     text,
     detected_timer_seconds: detectTimerSeconds(text),
+    kind: classifyStepKind(text),
   }));
 
   return {
@@ -95,6 +97,7 @@ export function parseFromText(
   const steps = split.steps.map((t) => ({
     text: t,
     detected_timer_seconds: detectTimerSeconds(t),
+    kind: classifyStepKind(t),
   }));
 
   return {

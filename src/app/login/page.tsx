@@ -28,12 +28,12 @@ export default function LoginPage() {
   return (
     <main className="min-h-full flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-sm text-center">
-        <h1 className="text-5xl font-semibold text-accent">Subarashii</h1>
+        <h1 className="text-5xl text-accent">Subarashii</h1>
         <p className="mt-3 text-muted">Ella&apos;s recipe box.</p>
 
         {sent ? (
-          <div className="mt-10 rounded-2xl border border-border bg-card p-6">
-            <p className="text-lg font-semibold">Check your email ✨</p>
+          <div className="mt-10 rounded-[28px] bg-card p-6 shadow-[0px_16px_40px_rgba(0,0,0,0.08)]">
+            <p className="text-lg font-bold">Check your email ✨</p>
             <p className="mt-2 text-sm text-muted">
               We sent a magic link to <strong>{email}</strong>. Tap it to sign
               in — no password needed.
@@ -48,12 +48,12 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
-              className="rounded-xl border border-border bg-card px-4 py-3 text-center outline-none focus:border-accent"
+              className="rounded-2xl bg-card px-4 py-3.5 text-center shadow-[0px_6px_20px_rgba(0,0,0,0.05)] outline-none focus:shadow-[0px_0px_0px_2px_var(--accent)]"
             />
             <button
               type="submit"
               disabled={loading}
-              className="rounded-xl bg-accent px-4 py-3 font-semibold text-accent-ink transition active:scale-[0.98] disabled:opacity-60"
+              className="rounded-full bg-accent px-4 py-3.5 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] transition active:scale-[0.98] disabled:opacity-60"
             >
               {loading ? "Sending…" : "Send me a magic link"}
             </button>

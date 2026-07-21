@@ -6,7 +6,12 @@ function isPublicPath(pathname: string) {
   return (
     pathname === "/login" ||
     pathname.startsWith("/auth") ||
-    pathname.startsWith("/api/ingest")
+    pathname.startsWith("/api/ingest") ||
+    // Dev-only sign-in shortcut (see src/app/api/dev-login/route.ts) — the
+    // route itself 404s outside development, so gating this on NODE_ENV too
+    // means it's never even reachable-but-blocked in production, just gone.
+    (process.env.NODE_ENV === "development" &&
+      pathname.startsWith("/api/dev-login"))
   );
 }
 

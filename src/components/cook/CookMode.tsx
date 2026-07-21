@@ -55,16 +55,16 @@ export function CookMode({
 
   return (
     <div className="flex h-dvh flex-col bg-background">
-      <header className="flex items-center gap-3 border-b border-border px-4 py-3">
+      <header className="flex items-center gap-3 px-4 pb-2 pt-4">
         <Link
           href={`/recipe/${recipeId}`}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border text-lg active:scale-95"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-card text-lg shadow-[0px_6px_16px_rgba(0,0,0,0.08)] active:scale-95"
           aria-label="Exit Cook Mode"
         >
           ✕
         </Link>
         <div className="min-w-0 flex-1">
-          <p dir={dirFor(title)} className="truncate text-sm font-semibold">
+          <p dir={dirFor(title)} className="truncate text-sm font-bold">
             {title}
           </p>
           {steps.length > 0 && tab === "steps" && (
@@ -78,7 +78,7 @@ export function CookMode({
         </div>
       </header>
 
-      <div className="flex gap-1 border-b border-border px-4 pt-2">
+      <div className="mx-4 mt-2 flex gap-1 rounded-full bg-card p-1 shadow-[0px_6px_20px_rgba(0,0,0,0.05)]">
         <TabButton active={tab === "steps"} onClick={() => setTab("steps")}>
           Steps
         </TabButton>
@@ -93,8 +93,8 @@ export function CookMode({
             <p className="text-center text-muted">This recipe has no steps yet.</p>
           ) : (
             <div className="flex h-full flex-col">
-              <div className="flex flex-1 flex-col items-center justify-center text-center">
-                <span className="text-sm font-semibold text-muted">
+              <div className="flex flex-1 flex-col items-center justify-center rounded-[28px] bg-card px-6 py-8 text-center shadow-[0px_16px_40px_rgba(0,0,0,0.06)]">
+                <span className="text-sm font-bold text-accent">
                   Step {stepIndex + 1} of {steps.length}
                 </span>
                 <p
@@ -108,7 +108,7 @@ export function CookMode({
                     onClick={() =>
                       start(`Step ${stepIndex + 1}`, current.detected_timer_seconds!)
                     }
-                    className="mt-6 rounded-full bg-accent px-5 py-3 font-semibold text-accent-ink active:scale-95"
+                    className="mt-6 rounded-full bg-accent px-5 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] active:scale-95"
                   >
                     ⏱ Start {formatClock(current.detected_timer_seconds)} timer
                   </button>
@@ -119,14 +119,14 @@ export function CookMode({
                 <button
                   onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
                   disabled={stepIndex === 0}
-                  className="flex-1 rounded-full border border-border py-4 text-lg font-semibold disabled:opacity-30 active:scale-95"
+                  className="flex-1 rounded-full bg-card py-4 text-lg font-bold shadow-[0px_6px_20px_rgba(0,0,0,0.06)] disabled:opacity-30 active:scale-95"
                 >
                   ← Back
                 </button>
                 <button
                   onClick={() => setStepIndex((i) => Math.min(steps.length - 1, i + 1))}
                   disabled={stepIndex === steps.length - 1}
-                  className="flex-1 rounded-full bg-accent py-4 text-lg font-semibold text-accent-ink disabled:opacity-30 active:scale-95"
+                  className="flex-1 rounded-full bg-accent py-4 text-lg font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] disabled:opacity-30 active:scale-95"
                 >
                   Next →
                 </button>
@@ -141,10 +141,8 @@ export function CookMode({
                 <li key={ing.id}>
                   <button
                     onClick={() => toggleIngredient(ing.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition ${
-                      checked
-                        ? "border-border bg-border/40 text-muted line-through"
-                        : "border-border bg-card"
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left shadow-[0px_4px_14px_rgba(0,0,0,0.05)] transition ${
+                      checked ? "bg-border/40 text-muted line-through" : "bg-card"
                     }`}
                   >
                     <span
@@ -188,8 +186,8 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`rounded-t-lg px-4 py-2 text-sm font-semibold ${
-        active ? "border-b-2 border-accent text-foreground" : "text-muted"
+      className={`flex-1 rounded-full px-4 py-2 text-sm font-bold transition ${
+        active ? "bg-accent text-accent-ink" : "text-muted"
       }`}
     >
       {children}

@@ -1,4 +1,5 @@
 import type { Lang } from "./lang";
+import type { StepKind } from "./parser/stepKind";
 
 export type SourceType =
   | "blog"
@@ -16,6 +17,7 @@ export interface ParsedIngredient {
 export interface ParsedStep {
   text: string;
   detected_timer_seconds: number | null;
+  kind: StepKind;
 }
 
 // Normalized shape produced by every capture path before it is saved.
