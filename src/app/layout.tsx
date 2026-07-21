@@ -38,6 +38,18 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Subarashii",
   },
+  // This Next.js version's `appleWebApp.capable` only emits the new
+  // unprefixed `mobile-web-app-capable` meta tag (confirmed in
+  // node_modules/next/dist/docs/.../generate-metadata.md — a deliberate
+  // rename in this version, per the repo's "not the Next.js you know"
+  // warning). iOS Safari doesn't read that unprefixed tag at all — it only
+  // ever honors the legacy `apple-mobile-web-app-capable` one to suppress
+  // the browser chrome on "Add to Home Screen." Without it, the installed
+  // PWA renders inside Safari's normal toolbar instead of standalone. Add
+  // it explicitly via `other` since the typed API in this version won't.
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 export const viewport: Viewport = {
