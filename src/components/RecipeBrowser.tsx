@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { dirFor } from "@/lib/lang";
+import { categoryForCuisine, CATEGORY_STYLES } from "@/lib/categoryColor";
 
 export interface CardRecipe {
   id: string;
@@ -12,6 +13,14 @@ export interface CardRecipe {
   needs_review: boolean;
   total_time_min: number | null;
   cuisine: string | null;
+  /** Per-serving calories, computed server-side from ingredient totals
+   *  (see `@/lib/nutritionCalc`). Null when no nutrition data exists yet —
+   *  the footer pill falls back to `total_time_min` in that case. */
+  calories: number | null;
+  /** "High Protein"/"High Sugar"/etc, same classification as the recipe
+   *  detail page's NutritionChips. The card only has room for one badge, so
+   *  RecipeCard shows the first flag (falls back to nothing if none). */
+  nutritionFlags: string[];
 }
 
 type TimeFilter = "any" | "30" | "60" | "60+";
@@ -145,13 +154,36 @@ function FilterChip({
   );
 }
 
+// Recipe card, redesigned per the user's Figma style guide (task #24).
+// Re-verified directly against the live Figma file (desktop app inspection,
+// not just the earlier paraphrased style summary) after the user flagged
+// mismatches:
+//   - The photo→body transition is a diagonal "flag notch" (flat edge that
+//     angles up to a triangular photo reveal at the top-right), not a wave.
+//   - The photo badge uses Figma's `custom glass` effect style: white fill
+//     at 20% opacity, a full-opacity 1px white inside stroke, fully rounded
+//     corners, backdrop blur. Confirmed via the Design panel's Fill/Effects
+//     fields on the badge background rectangle.
+// Category color is auto-assigned from `cuisine` (see
+// src/lib/categoryColor.ts) — a decorative/organizational system, unrelated
+// to the nutrition chips' protein/fat/sugar/fiber colors shown on the
+// recipe detail page.
 function RecipeCard({ recipe }: { recipe: CardRecipe }) {
+  const category = categoryForCuisine(recipe.cuisine);
+  const styles = CATEGORY_STYLES[category];
+
+  // The glass badge slot only fits one label. `needs_review` is a real,
+  // functionally important state (parsing failed, details need manual
+  // entry) so it takes priority over the cosmetic nutrition flags when both
+  // are true.
+  const badgeText = recipe.needs_review ? "Needs review" : (recipe.nutritionFlags[0] ?? null);
+
   return (
     <Link
       href={`/recipe/${recipe.id}`}
-      className="group flex flex-col items-center rounded-[28px] bg-card px-4 pb-4 pt-6 text-center shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
+      className="group block overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
     >
-      <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-accent/10">
+      <div className="relative h-36 w-full overflow-hidden bg-card">
         {recipe.cover_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -160,25 +192,58 @@ function RecipeCard({ recipe }: { recipe: CardRecipe }) {
             className="h-full w-full object-cover transition group-hover:scale-105"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/50">
+          <div className={`flex h-full w-full items-center justify-center text-3xl font-bold ${styles.titleText} ${styles.cardBg}`}>
             {recipe.title.charAt(0).toUpperCase()}
           </div>
         )}
+        {badgeText && (
+          // Figma's `custom glass` effect style: white 20%-opacity fill,
+          // full-opacity 1px white inside stroke, fully rounded, blurred —
+          // approximated with `border-white` (not `border-white/40`, which
+          // was a guess from the earlier paraphrased pass) + backdrop-blur.
+          <span className="absolute top-3 left-3 max-w-[calc(100%-1.5rem)] truncate rounded-full border border-white bg-white/20 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-md">
+            {badgeText}
+          </span>
+        )}
       </div>
-      {recipe.needs_review && (
-        <span className="mt-2 rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text">
-          Needs review
-        </span>
-      )}
-      <p
-        dir={dirFor(recipe.title)}
-        className="mt-3 line-clamp-2 text-[15px] font-bold leading-snug"
+      {/* Card body: pulled up over the photo's bottom edge and clipped to the
+          Figma "flag notch" — traced from the real card vector (Card Layout
+          Design, node 1521:512 group), pasted by the user as raw SVG since
+          the Figma MCP is rate-limited. The notch is flat-diagonal-flat, not
+          a single diagonal corner cut: flat top-left to x≈340 (43% of the
+          697-wide shape, (340.017-40)/697), a riser down to x≈427 (55.6%,
+          (427.483-40)/697) at 28px deep (matches -mt-7 almost exactly:
+          Figma's 53.5-unit notch / 471.5-unit card height ≈ 11.35%, vs our
+          28px / 144px photo height ≈ 19.4% — proportionally consistent once
+          you account for the body-only overlap vs. whole-card scale), then
+          flat again out to the right edge. A straight-line clip-path needs
+          no per-category SVG asset — it just reuses the body's own bg
+          color. */}
+      <div
+        className={`relative -mt-7 px-4 pb-4 pt-8 ${styles.cardBg}`}
+        style={{ clipPath: "polygon(0 0, 43% 0, 55.6% 28px, 100% 28px, 100% 100%, 0 100%)" }}
       >
-        {recipe.title}
-      </p>
-      {recipe.total_time_min && (
-        <p className="mt-1 text-sm font-bold text-accent">{recipe.total_time_min} min</p>
-      )}
+        <p className={`font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}>
+          {recipe.cuisine ?? "Uncategorized"}
+        </p>
+        <p
+          dir={dirFor(recipe.title)}
+          className={`mt-1 line-clamp-2 font-heading text-[15px] font-semibold leading-snug ${styles.titleText}`}
+        >
+          {recipe.title}
+        </p>
+        {recipe.calories != null ? (
+          <span className={`mt-2 inline-block rounded-full px-3 py-1 font-mono text-xs font-medium ${styles.pillBg} ${styles.pillText}`}>
+            {Math.round(recipe.calories)} cal
+          </span>
+        ) : (
+          recipe.total_time_min && (
+            <span className={`mt-2 inline-block rounded-full px-3 py-1 font-mono text-xs font-medium ${styles.pillBg} ${styles.pillText}`}>
+              {recipe.total_time_min} min
+            </span>
+          )
+        )}
+      </div>
     </Link>
   );
 }

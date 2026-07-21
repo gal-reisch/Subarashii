@@ -1,10 +1,12 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
-import { NutritionChips, type NutritionTotals } from "@/components/NutritionChips";
+import { LinkButton } from "@/components/Button";
+import { NutritionChips } from "@/components/NutritionChips";
+import { toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { dirFor } from "@/lib/lang";
+import { computeNutritionTotals } from "@/lib/nutritionCalc";
 import { createClient } from "@/lib/supabase/server";
 
 interface Ingredient {
@@ -19,47 +21,6 @@ interface Ingredient {
   is_estimated: boolean;
 }
 
-const NUTRITION_KEYS = ["calories", "protein_g", "carbs_g", "fat_g", "fiber_g", "sugar_g"] as const;
-
-// Sums whichever nutrition columns have at least one non-null value across
-// the recipe's ingredients, scales to per-serving, and flags the whole
-// section as "Estimated" if any contributing ingredient used the LLM
-// fallback rather than a Tzameret/USDA match. Returns null when there's no
-// nutrition data at all yet (nothing has been matched or estimated) — the
-// section just doesn't render rather than showing fabricated zeros.
-function computeNutritionTotals(ingredients: Ingredient[], servings: number | null): NutritionTotals | null {
-  const divisor = servings && servings > 0 ? servings : 1;
-  const totals: Record<(typeof NUTRITION_KEYS)[number], number | null> = {
-    calories: null,
-    protein_g: null,
-    carbs_g: null,
-    fat_g: null,
-    fiber_g: null,
-    sugar_g: null,
-  };
-  let anyValue = false;
-  let isEstimated = false;
-
-  for (const key of NUTRITION_KEYS) {
-    let sum = 0;
-    let hasAny = false;
-    for (const ing of ingredients) {
-      const v = ing[key];
-      if (v != null) {
-        sum += v;
-        hasAny = true;
-        if (ing.is_estimated) isEstimated = true;
-      }
-    }
-    if (hasAny) {
-      totals[key] = sum / divisor;
-      anyValue = true;
-    }
-  }
-
-  if (!anyValue) return null;
-  return { ...totals, isEstimated };
-}
 interface Step {
   id: string;
   text: string;
@@ -109,6 +70,29 @@ export default async function RecipePage({
       <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
         <div className="flex items-center justify-between">
           <BackButton href="/" label="Back to the box" />
+          {/* Favorite toggle (task #24) — plain-submit form, no client JS.
+              `recipe.is_favorite` is undefined until migration 0005 is
+              applied; treat that as not-favorited. */}
+          <form action={toggleFavoriteAction}>
+            <input type="hidden" name="recipe_id" value={recipe.id} />
+            <input type="hidden" name="is_favorite" value={String(!!recipe.is_favorite)} />
+            <button
+              type="submit"
+              aria-label={recipe.is_favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={!!recipe.is_favorite}
+              className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition active:scale-90"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 20s-7-4.35-9.33-8.5C1.1 8.6 2.5 5.5 5.6 5.5c1.9 0 3.2 1.1 4.4 2.6 1.2-1.5 2.5-2.6 4.4-2.6 3.1 0 4.5 3.1 2.93 6C19 15.65 12 20 12 20Z"
+                  fill={recipe.is_favorite ? "currentColor" : "none"}
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </form>
         </div>
 
         {recipe.cover_image_url && (
@@ -130,7 +114,7 @@ export default async function RecipePage({
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-semibold text-muted">
           {recipe.servings && <span>{recipe.servings} servings</span>}
           {recipe.total_time_min && (
-            <span className="text-accent">{recipe.total_time_min} min</span>
+            <span className="font-mono text-accent">{recipe.total_time_min} min</span>
           )}
           {recipe.cuisine && <span>{recipe.cuisine}</span>}
           {recipe.source_url && (
@@ -146,12 +130,12 @@ export default async function RecipePage({
         </div>
 
         {(ings.length > 0 || stps.length > 0) && (
-          <Link
+          <LinkButton
             href={`/recipe/${recipe.id}/cook`}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-accent py-4 text-lg font-bold text-accent-ink shadow-[0px_16px_36px_rgba(191,74,26,0.45)] transition active:scale-[0.98]"
+            className="mt-6 flex w-full items-center justify-center gap-2 py-4 text-lg"
           >
             👩‍🍳 Start Cooking
-          </Link>
+          </LinkButton>
         )}
 
         {recipe.needs_review && (

@@ -1,19 +1,27 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fbf7f0; /* warm cream — dominant neutral, ~70% of the UI */
+  --background: #fcfdf7; /* cream — dominant neutral, ~70% of the UI */
   --foreground: #2b2420; /* warm ink */
   --card: #ffffff;
   --muted: #8a7f76;
   --border: #ece2d5;
 
   /* Single brand accent, reserved for actionable/primary elements only
-     (CTAs, active nav, links, prices/times) — punchy warm "burnt orange" for
-     a food-app "appetite" feel, tuned to clear WCAG AA (4.5:1) against both
-     --background and --accent-ink so button/link text stays readable at
-     normal weight, not just large bold text. */
-  --accent: #bf4a1a;
-  --accent-ink: #fff8f1;
+     (CTAs, active nav, links, prices/times) — soft pink per the user's own
+     Figma style guide (task #24), replacing the earlier burnt-orange
+     food-delivery-kit accent. --accent-ink is a near-black ink for text/icons
+     sitting on solid --accent fills (buttons, FAB) — pink-on-cream usages
+     (e.g. nav glyphs) use --accent directly instead, per the Figma nav
+     component, and were not re-verified against WCAG AA — flagged in the
+     redesign plan as a possible contrast regression vs. the prior palette. */
+  --accent: #f4a6d2;
+  --accent-ink: #1a1a1a;
+
+  /* Secondary "button inactive" state — Figma's gray pill treatment for the
+     non-selected segment of a toggle/short-button pair. */
+  --button-inactive-bg: #e5e5e5;
+  --button-inactive-text: #9f9f9f;
 
   /* Secondary semantic hues — used sparingly (small badges/banners only) so
      they never compete with --accent for "what's tappable". Warm amber reads
@@ -30,7 +38,11 @@
      own tinted card rather than one muted badge style for everything).
      calories/carbs intentionally reuse --warn/--info above; these four are
      the net-new hues. Every pair below is verified ≥4.5:1 (WCAG AA, normal
-     text) for its bold text color against its own tinted background. */
+     text) for its bold text color against its own tinted background.
+     NOTE: this is a nutrient-type system (protein/fat/sugar/fiber, fixed
+     meaning across every recipe) — completely separate from the per-recipe
+     "category" color ramp below (--recipe-cat-*), which is decorative and
+     assigned per recipe via its cuisine. Do not conflate the two. */
   --cat-protein-bg: #cfe7f8;
   --cat-protein-text: #1b5a7a;
   --cat-fat-bg: #e4d9f6;
@@ -39,6 +51,37 @@
   --cat-sugar-text: #9c3a22;
   --cat-fiber-bg: #cfeee6;
   --cat-fiber-text: #1c6b5c;
+
+  /* Per-recipe category color ramp (task #24) — 6 hues, 4 shades each
+     (dark/mid/light/pale), sourced from the user's Figma "Category Color
+     Scheme" frame. Assigned to a recipe via src/lib/categoryColor.ts based
+     on its `cuisine` field. Used on recipe cards only: dark = category
+     label + title text, light = card body background, mid = footer stat
+     pill background, pale = footer stat pill text / wave-fill accent. */
+  --recipe-cat-teal-dark: #024e4a;
+  --recipe-cat-teal-mid: #89b9b9;
+  --recipe-cat-teal-light: #b2d9d7;
+  --recipe-cat-teal-pale: #d7fffd;
+  --recipe-cat-rust-dark: #582003;
+  --recipe-cat-rust-mid: #ed7a3e;
+  --recipe-cat-rust-light: #f3a886;
+  --recipe-cat-rust-pale: #ffdbcb;
+  --recipe-cat-purple-dark: #301b6a;
+  --recipe-cat-purple-mid: #957cd8;
+  --recipe-cat-purple-light: #c8b3f8;
+  --recipe-cat-purple-pale: #f1eaff;
+  --recipe-cat-olive-dark: #274b16;
+  --recipe-cat-olive-mid: #afba7a;
+  --recipe-cat-olive-light: #ebefa8;
+  --recipe-cat-olive-pale: #fdffd4;
+  --recipe-cat-blue-dark: #14325c;
+  --recipe-cat-blue-mid: #7babef;
+  --recipe-cat-blue-light: #c4dffd;
+  --recipe-cat-blue-pale: #ebf4ff;
+  --recipe-cat-amber-dark: #4f3404;
+  --recipe-cat-amber-mid: #daa33f;
+  --recipe-cat-amber-light: #f8d289;
+  --recipe-cat-amber-pale: #ffefd0;
 }
 
 @theme inline {
@@ -49,6 +92,8 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-button-inactive-bg: var(--button-inactive-bg);
+  --color-button-inactive-text: var(--button-inactive-text);
   --color-warn-bg: var(--warn-bg);
   --color-warn-text: var(--warn-text);
   --color-info-bg: var(--info-bg);
@@ -61,7 +106,33 @@
   --color-cat-sugar-text: var(--cat-sugar-text);
   --color-cat-fiber-bg: var(--cat-fiber-bg);
   --color-cat-fiber-text: var(--cat-fiber-text);
+  --color-recipe-cat-teal-dark: var(--recipe-cat-teal-dark);
+  --color-recipe-cat-teal-mid: var(--recipe-cat-teal-mid);
+  --color-recipe-cat-teal-light: var(--recipe-cat-teal-light);
+  --color-recipe-cat-teal-pale: var(--recipe-cat-teal-pale);
+  --color-recipe-cat-rust-dark: var(--recipe-cat-rust-dark);
+  --color-recipe-cat-rust-mid: var(--recipe-cat-rust-mid);
+  --color-recipe-cat-rust-light: var(--recipe-cat-rust-light);
+  --color-recipe-cat-rust-pale: var(--recipe-cat-rust-pale);
+  --color-recipe-cat-purple-dark: var(--recipe-cat-purple-dark);
+  --color-recipe-cat-purple-mid: var(--recipe-cat-purple-mid);
+  --color-recipe-cat-purple-light: var(--recipe-cat-purple-light);
+  --color-recipe-cat-purple-pale: var(--recipe-cat-purple-pale);
+  --color-recipe-cat-olive-dark: var(--recipe-cat-olive-dark);
+  --color-recipe-cat-olive-mid: var(--recipe-cat-olive-mid);
+  --color-recipe-cat-olive-light: var(--recipe-cat-olive-light);
+  --color-recipe-cat-olive-pale: var(--recipe-cat-olive-pale);
+  --color-recipe-cat-blue-dark: var(--recipe-cat-blue-dark);
+  --color-recipe-cat-blue-mid: var(--recipe-cat-blue-mid);
+  --color-recipe-cat-blue-light: var(--recipe-cat-blue-light);
+  --color-recipe-cat-blue-pale: var(--recipe-cat-blue-pale);
+  --color-recipe-cat-amber-dark: var(--recipe-cat-amber-dark);
+  --color-recipe-cat-amber-mid: var(--recipe-cat-amber-mid);
+  --color-recipe-cat-amber-light: var(--recipe-cat-amber-light);
+  --color-recipe-cat-amber-pale: var(--recipe-cat-amber-pale);
   --font-sans: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-mono: var(--font-mono);
 }
 
 body {
@@ -70,14 +141,12 @@ body {
   font-family: var(--font-sans), ui-rounded, system-ui, sans-serif;
 }
 
-/* Bold, rounded headlines everywhere — no separate serif/display face.
-   `ui-rounded` is a Safari/WebKit generic that resolves to SF Pro Rounded on
-   Apple devices, leaning closer to the reference look there while degrading
-   gracefully to Nunito elsewhere. */
+/* Headings use Poppins SemiBold per the Figma style guide (task #24) — body
+   copy stays on Nunito (--font-sans) via the `body` rule above. */
 h1,
 h2,
 h3 {
-  font-family: var(--font-sans), ui-rounded, system-ui, sans-serif;
-  font-weight: 800;
+  font-family: var(--font-heading), system-ui, sans-serif;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }

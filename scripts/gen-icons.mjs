@@ -1,16 +1,28 @@
-// One-off: render placeholder app icons (persimmon tile with an "S").
-// Real icon art is deferred per the owner. Re-run after replacing the art.
+// Render app icons: a pink-to-cream gradient rounded square with the
+// flower/daisy graphic from the user's Figma "App Icon" frame (task #24)
+// composited on top. Source asset: scripts/assets/app-icon-source.png
+// (downloaded from the Figma MCP asset endpoint — if that URL ever expires
+// and this needs re-running from scratch, re-fetch the "App Icon" node's
+// image via the Figma MCP and overwrite that file).
 import sharp from "sharp";
 import { mkdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 mkdirSync("public/icons", { recursive: true });
 
-const svg = (size) => `
+const ASSET_PATH = fileURLToPath(new URL("./assets/app-icon-source.png", import.meta.url));
+
+// Rounded-square gradient background, pink (top) -> cream (bottom), corner
+// radius scaled to iOS/Android icon conventions (~22% of size).
+const backgroundSvg = (size) => `
 <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
-  <rect width="100%" height="100%" fill="#d9743b"/>
-  <text x="50%" y="53%" font-family="Georgia, 'Times New Roman', serif"
-        font-size="${Math.round(size * 0.62)}" font-weight="700" fill="#fbf7f0"
-        text-anchor="middle" dominant-baseline="central">S</text>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4a6d2"/>
+      <stop offset="100%" stop-color="#fcfdf7"/>
+    </linearGradient>
+  </defs>
+  <rect width="100%" height="100%" rx="${Math.round(size * 0.22)}" fill="url(#g)"/>
 </svg>`;
 
 const targets = [
@@ -20,6 +32,11 @@ const targets = [
 ];
 
 for (const [file, size] of targets) {
-  await sharp(Buffer.from(svg(size))).png().toFile(file);
+  const flowerWidth = Math.round(size * 0.62);
+  const flower = await sharp(ASSET_PATH).resize({ width: flowerWidth }).toBuffer();
+  await sharp(Buffer.from(backgroundSvg(size)))
+    .composite([{ input: flower, gravity: "center" }])
+    .png()
+    .toFile(file);
   console.log("wrote", file);
 }

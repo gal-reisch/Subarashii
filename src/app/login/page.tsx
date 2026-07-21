@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/Button";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
@@ -50,13 +51,9 @@ export default function LoginPage() {
               placeholder="you@example.com"
               className="rounded-2xl bg-card px-4 py-3.5 text-center shadow-[0px_6px_20px_rgba(0,0,0,0.05)] outline-none focus:shadow-[0px_0px_0px_2px_var(--accent)]"
             />
-            <button
-              type="submit"
-              disabled={loading}
-              className="rounded-full bg-accent px-4 py-3.5 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] transition active:scale-[0.98] disabled:opacity-60"
-            >
+            <Button type="submit" disabled={loading}>
               {loading ? "Sending…" : "Send me a magic link"}
-            </button>
+            </Button>
             {error && <p className="text-sm text-red-600">{error}</p>}
           </form>
         )}

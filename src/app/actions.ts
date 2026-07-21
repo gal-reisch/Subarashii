@@ -92,6 +92,22 @@ export async function addManualAction(formData: FormData) {
   redirect(`/recipe/${id}`);
 }
 
+// Toggle a recipe's household-shared favorite flag (task #24 nav restructure —
+// backs the Figma "Favorites" tab). Rendered as a small <form> on the recipe
+// detail page so it works with a plain submit, no client JS. Requires the
+// `is_favorite` column from migration 0005_favorite.sql.
+export async function toggleFavoriteAction(formData: FormData) {
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  const isFavorite = formData.get("is_favorite") === "true";
+  if (!recipeId) return;
+
+  const { supabase } = await requireUser();
+  await supabase.from("recipe").update({ is_favorite: !isFavorite }).eq("id", recipeId);
+  revalidatePath(`/recipe/${recipeId}`);
+  revalidatePath("/favorites");
+  revalidatePath("/");
+}
+
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();

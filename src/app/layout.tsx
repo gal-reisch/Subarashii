@@ -1,15 +1,28 @@
 import type { Metadata, Viewport } from "next";
-import { Nunito } from "next/font/google";
+import { Nunito, Poppins, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import "./globals.css";
 
-// Nunito carries both body copy and headlines — it's a rounded, friendly
-// sans that reads close to the reference design's "SF Pro Rounded" without
-// needing a licensed system font. No separate display/serif face anymore.
+// Nunito carries body copy — it's a rounded, friendly sans. Headlines,
+// recipe titles, and field labels use Poppins (SemiBold 600 / Medium 500);
+// numeric/stat values (calorie counts, times) use Geist Mono. Pairing per
+// the user's Figma style guide (task #24).
 const sans = Nunito({
   variable: "--font-sans",
   subsets: ["latin"],
   weight: ["400", "600", "700", "800", "900"],
+});
+
+const heading = Poppins({
+  variable: "--font-heading",
+  subsets: ["latin"],
+  weight: ["500", "600"],
+});
+
+const mono = Geist_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["500"],
 });
 
 export const metadata: Metadata = {
@@ -28,7 +41,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#fbf7f0",
+  themeColor: "#fcfdf7",
 };
 
 export default function RootLayout({
@@ -37,7 +50,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${sans.variable} h-full antialiased`}
+      className={`${sans.variable} ${heading.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         {children}
