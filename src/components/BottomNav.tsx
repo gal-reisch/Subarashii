@@ -161,14 +161,19 @@ function PlusIcon() {
   );
 }
 
-// Placeholder avatar for "Ella" — the Figma nav uses a real photo (a masked
-// image layer), which we don't have yet. A pink-tinted initial circle stands
-// in until a real photo is provided, styled to read as an avatar rather than
-// another icon. TODO(task #24 follow-up): swap in Ella's actual photo.
+// Ella's avatar — a pre-circle-masked PNG (public/avatar-ella.png, sourced
+// from scripts/assets/ella-avatar-source.png; the source had a solid white
+// square canvas around the pink circle art, so it's center-cropped to a
+// square and clipped to a circle via an SVG alpha mask in a one-off sharp
+// script rather than committing that logic to gen-icons.mjs, since it's a
+// single fixed asset, not a per-size icon pipeline). `rounded-full
+// overflow-hidden` here is a belt-and-suspenders clip in case the source PNG
+// is ever swapped for one that isn't already pre-masked.
 function Avatar() {
   return (
-    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-accent/25 font-heading text-[13px] font-semibold text-accent ring-1 ring-white/70">
-      E
+    <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-white/70">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/avatar-ella.png" alt="" className="h-full w-full object-cover" />
     </span>
   );
 }
