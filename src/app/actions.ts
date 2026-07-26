@@ -174,6 +174,59 @@ export async function toggleFavoriteAction(formData: FormData) {
   revalidatePath("/");
 }
 
+// Set (or correct) how many servings a recipe makes.
+//
+// Not cosmetic: `computeNutritionTotals` divides by this number, so until
+// it's known the nutrition panel can only show whole-recipe totals. Plenty
+// of sources — Instagram captions especially — never state a yield, and the
+// extractor is instructed never to invent one, so this is the manual way to
+// turn "2,104 kcal for the tray" into "351 kcal a portion".
+//
+// Clamped to 1-100. A zero would divide by zero; the upper bound is just a
+// guard on a public POST endpoint. Submitting an empty value clears it back
+// to unknown, which is the honest state for a recipe nobody has portioned.
+export async function setServingsAction(formData: FormData) {
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  if (!recipeId) return;
+
+  const raw = String(formData.get("servings") ?? "").trim();
+  const parsedNum = parseInt(raw, 10);
+  const servings =
+    raw && !Number.isNaN(parsedNum) && parsedNum > 0 ? Math.min(parsedNum, 100) : null;
+
+  const supabase = createServiceClient();
+  await supabase.from("recipe").update({ servings }).eq("id", recipeId);
+
+  revalidatePath(`/recipe/${recipeId}`);
+  revalidatePath("/");
+}
+
+// Delete a recipe, from either the home-page card's small × or the detail
+// page's full-width Delete button. Both go through the confirm dialog in
+// components/DeleteRecipe.tsx first — this action itself is unguarded, since
+// a Server Action is a public POST endpoint and a second confirmation here
+// would just be theater.
+//
+// Only the `recipe` row is deleted: ingredient, step, recipe_collection and
+// cook_log all declare `on delete cascade` on their recipe_id foreign key
+// (supabase/migrations/0001_init.sql), so the children go with it and there's
+// nothing to clean up by hand.
+export async function deleteRecipeAction(formData: FormData) {
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  if (!recipeId) return;
+
+  const supabase = createServiceClient();
+  await supabase.from("recipe").delete().eq("id", recipeId);
+
+  revalidatePath("/");
+  revalidatePath("/favorites");
+  revalidatePath("/collections");
+  // Always land on the box. Deleting from a card could technically stay put,
+  // but the detail page for a just-deleted recipe would 404, so both entry
+  // points share the same destination.
+  redirect("/");
+}
+
 export async function signOutAction() {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);

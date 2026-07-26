@@ -25,6 +25,7 @@ export default function NutritionPreviewPage() {
           isEstimated: true,
           perServing: true,
         }}
+        servings={4}
       />
 
       <div className="mt-10 border-t border-border pt-6">
@@ -40,6 +41,27 @@ export default function NutritionPreviewPage() {
             isEstimated: false,
             perServing: true,
           }}
+          servings={2}
+        />
+      </div>
+
+      <div className="mt-10 border-t border-border pt-6">
+        <p className="text-sm text-muted">
+          Unknown serving count — totals are for the whole recipe and the
+          header has to say so rather than claiming &quot;per serving&quot;:
+        </p>
+        <NutritionChips
+          totals={{
+            calories: 2104,
+            protein_g: 96,
+            carbs_g: 180,
+            fat_g: 121,
+            fiber_g: 14,
+            sugar_g: 64,
+            isEstimated: true,
+            perServing: false,
+          }}
+          servings={null}
         />
       </div>
     </div>

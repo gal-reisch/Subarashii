@@ -3,8 +3,9 @@ import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
 import { HeartIcon } from "@/components/HeartIcon";
 import { LinkButton } from "@/components/Button";
+import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
-import { toggleFavoriteAction } from "@/app/actions";
+import { setServingsAction, toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { dirFor } from "@/lib/lang";
@@ -210,7 +211,15 @@ export default async function RecipePage({
           </section>
         )}
 
-        {nutritionTotals && <NutritionChips totals={nutritionTotals} />}
+        {nutritionTotals && (
+          <NutritionChips
+            totals={nutritionTotals}
+            servings={recipe.servings}
+            servingsControl={
+              <ServingsControl recipeId={recipe.id} servings={recipe.servings} />
+            }
+          />
+        )}
 
         {stps.length > 0 && (() => {
           // Only real instructions get numbered. "tip"s are genuine asides
@@ -310,8 +319,66 @@ export default async function RecipePage({
             </section>
           );
         })()}
+
+        {/* Full-hierarchy delete, at the very bottom — past the point where
+            anyone is still reading the recipe, which is where a destructive
+            action belongs. The home-page card carries the same action as a
+            small ×; both open the same confirm dialog. */}
+        <section className="mt-12">
+          <DeleteRecipe recipeId={recipe.id} title={recipe.title} variant="full" />
+        </section>
       </main>
       <BottomNav />
     </div>
+  );
+}
+
+// Sets how many portions the recipe makes, which is what lets the nutrition
+// panel divide totals down to a per-serving figure. Two presentations of one
+// plain <form> — no client JS:
+//
+//   - Unknown yield: an amber callout, because this is the state where the
+//     nutrition numbers above are whole-recipe and easy to misread.
+//   - Known yield: a quiet inline correction, since the header already says
+//     "makes N" and the user only comes here to disagree with it.
+function ServingsControl({
+  recipeId,
+  servings,
+}: {
+  recipeId: string;
+  servings: number | null;
+}) {
+  const unknown = servings == null;
+
+  return (
+    <form
+      action={setServingsAction}
+      className={`mt-3 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2.5 text-sm ${
+        unknown ? "bg-warn-bg text-warn-text" : "text-muted"
+      }`}
+    >
+      <input type="hidden" name="recipe_id" value={recipeId} />
+      <label htmlFor="servings" className="font-semibold">
+        {unknown
+          ? "This one never said how many it feeds. How many?"
+          : "Serves"}
+      </label>
+      <input
+        id="servings"
+        name="servings"
+        type="number"
+        min={1}
+        max={100}
+        defaultValue={servings ?? ""}
+        placeholder="—"
+        className="w-16 rounded-full border border-accent bg-white px-3 py-1 text-center font-mono text-sm text-foreground outline-none focus:shadow-[0px_0px_0px_2px_var(--accent)]"
+      />
+      <button
+        type="submit"
+        className="rounded-full bg-accent px-3 py-1 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
+      >
+        {unknown ? "Split it up" : "Update"}
+      </button>
+    </form>
   );
 }

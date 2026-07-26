@@ -22,7 +22,19 @@
 import { NUTRIENT_DEFS, getNutritionFlags, type NutritionTotals } from "@/lib/nutritionCalc";
 export type { NutritionTotals };
 
-export function NutritionChips({ totals }: { totals: NutritionTotals }) {
+export function NutritionChips({
+  totals,
+  servings,
+  servingsControl,
+}: {
+  totals: NutritionTotals;
+  /** The recipe's declared serving count, or null when it never stated one. */
+  servings: number | null;
+  /** Rendered under the header — the inline "how many servings?" form from
+   *  the recipe page. Passed in rather than imported so this component stays
+   *  presentational and reusable. */
+  servingsControl?: React.ReactNode;
+}) {
   const present = NUTRIENT_DEFS.filter((n) => totals[n.key] != null);
   if (present.length === 0) return null;
 
@@ -33,13 +45,22 @@ export function NutritionChips({ totals }: { totals: NutritionTotals }) {
     <section className="mt-8">
       <div className="flex items-center gap-2">
         <h2 className="text-[15px] font-bold">Nutrition</h2>
-        <span className="text-xs font-semibold text-muted">per serving</span>
+        {/* This label used to read "per serving" unconditionally, including
+            for recipes that never recorded a serving count — in which case
+            computeNutritionTotals returns whole-recipe totals and the header
+            was flatly lying. A tray of meatballs was being presented as a
+            2,104 kcal portion. Say which of the two the numbers actually are. */}
+        <span className="text-xs font-semibold text-muted">
+          {totals.perServing ? `per serving · makes ${servings}` : "whole recipe"}
+        </span>
         {totals.isEstimated && (
           <span className="ml-auto rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text">
             Estimated
           </span>
         )}
       </div>
+
+      {servingsControl}
 
       {flags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">

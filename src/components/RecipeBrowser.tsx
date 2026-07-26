@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { dirFor } from "@/lib/lang";
 import { CATEGORY_STYLES } from "@/lib/categoryColor";
 import {
@@ -245,107 +246,121 @@ function RecipeCard({
         : null;
 
   return (
-    <Link
-      href={`/recipe/${recipe.id}`}
-      style={{ width: CARD_W }}
-      className="group block shrink-0 overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
-    >
-      <div style={{ height: PHOTO_H }} className="relative w-full overflow-hidden bg-card">
-        {recipe.cover_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={recipe.cover_image_url}
-            alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
-          />
-        ) : (
-          <div
-            className={`flex h-full w-full items-center justify-center font-heading text-3xl font-semibold ${styles.titleText} ${styles.cardBg}`}
-          >
-            {recipe.title.charAt(0).toUpperCase()}
-          </div>
-        )}
-        {badgeText && (
-          // Two badge treatments over the photo:
-          //
-          //  - "glass" is Figma's `custom glass` effect style (white
-          //    20%-opacity fill, full-opacity 1px white inside stroke, fully
-          //    rounded, blurred). It looks right over a typical food photo,
-          //    but white-on-white is illegible over a pale one.
-          //  - "solid" is the readable fallback for badges that carry real
-          //    meaning rather than decoration. It keeps the same blurred
-          //    pill silhouette but inverts to a dark scrim, so it holds
-          //    contrast over light AND dark photos.
-          //
-          // Left inset matches the body's content inset (both 48 units in
-          // Figma) so the badge, the category label, the title and the stat
-          // pill all share one left margin. Text floored at 10px — a literal
-          // scale of Figma's 28-unit type would land under 10 and stop being
-          // readable on a phone.
-          <span
-            style={{ left: INSET, top: u(40) }}
-            className={`absolute max-w-[calc(100%-2rem)] truncate rounded-full px-2 py-[3px] font-heading text-[10px] font-medium backdrop-blur-md ${
-              badgeVariant === "solid"
-                ? "border border-white/50 bg-black/55 text-white"
-                : "border border-white bg-white/20 text-white"
-            }`}
-          >
-            {badgeText}
-          </span>
-        )}
-      </div>
-
-      {/* Card body, pulled up over the photo and clipped so its top edge is a
-          raised tab on the left holding the category label, then a short
-          diagonal riser down to the rest of the edge. In Figma the flat top
-          runs to ~43% of the body width and the riser lands at ~56%.
-
-          The depth is a px value derived from CARD_W rather than a clip-path
-          percentage, because clip-path resolves vertical percentages against
-          element *height* — and the body's height varies with how many lines
-          the title wraps to, which would make the tab grow and shrink per
-          card. A straight-line clip needs no per-category SVG asset either;
-          it just reuses the body's own background color. */}
-      <div
-        style={{
-          marginTop: -TAB_H,
-          minHeight: BODY_H,
-          paddingLeft: INSET,
-          paddingRight: INSET,
-          clipPath: `polygon(0 0, 43% 0, 56% ${TAB_H}px, 100% ${TAB_H}px, 100% 100%, 0 100%)`,
-        }}
-        className={`relative flex flex-col pb-4 ${styles.cardBg}`}
+    // The delete × is a sibling of the <Link>, not a child of it: a <button>
+    // nested inside an <a> is invalid HTML, and browsers disagree about which
+    // one a tap activates. Wrapping both in a positioned container keeps the
+    // whole card tappable while the × stays its own separate control.
+    <div style={{ width: CARD_W }} className="relative shrink-0">
+      <Link
+        href={`/recipe/${recipe.id}`}
+        className="group block overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
       >
-        <p
-          style={{ height: TAB_H }}
-          className={`flex items-center font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
+        <div style={{ height: PHOTO_H }} className="relative w-full overflow-hidden bg-card">
+          {recipe.cover_image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={recipe.cover_image_url}
+              alt=""
+              className="h-full w-full object-cover transition group-hover:scale-105"
+            />
+          ) : (
+            <div
+              className={`flex h-full w-full items-center justify-center font-heading text-3xl font-semibold ${styles.titleText} ${styles.cardBg}`}
+            >
+              {recipe.title.charAt(0).toUpperCase()}
+            </div>
+          )}
+          {badgeText && (
+            // Two badge treatments over the photo:
+            //
+            //  - "glass" is Figma's `custom glass` effect style (white
+            //    20%-opacity fill, full-opacity 1px white inside stroke, fully
+            //    rounded, blurred). It looks right over a typical food photo,
+            //    but white-on-white is illegible over a pale one.
+            //  - "solid" is the readable fallback for badges that carry real
+            //    meaning rather than decoration. It keeps the same blurred
+            //    pill silhouette but inverts to a dark scrim, so it holds
+            //    contrast over light AND dark photos.
+            //
+            // Left inset matches the body's content inset (both 48 units in
+            // Figma) so the badge, the category label, the title and the stat
+            // pill all share one left margin. Text floored at 10px — a literal
+            // scale of Figma's 28-unit type would land under 10 and stop being
+            // readable on a phone.
+            <span
+              style={{ left: INSET, top: u(40) }}
+              className={`absolute max-w-[calc(100%-2rem)] truncate rounded-full px-2 py-[3px] font-heading text-[10px] font-medium backdrop-blur-md ${
+                badgeVariant === "solid"
+                  ? "border border-white/50 bg-black/55 text-white"
+                  : "border border-white bg-white/20 text-white"
+              }`}
+            >
+              {badgeText}
+            </span>
+          )}
+        </div>
+
+        {/* Card body, pulled up over the photo and clipped so its top edge is a
+            raised tab on the left holding the category label, then a short
+            diagonal riser down to the rest of the edge. In Figma the flat top
+            runs to ~43% of the body width and the riser lands at ~56%.
+
+            The depth is a px value derived from CARD_W rather than a clip-path
+            percentage, because clip-path resolves vertical percentages against
+            element *height* — and the body's height varies with how many lines
+            the title wraps to, which would make the tab grow and shrink per
+            card. A straight-line clip needs no per-category SVG asset either;
+            it just reuses the body's own background color. */}
+        <div
+          style={{
+            marginTop: -TAB_H,
+            minHeight: BODY_H,
+            paddingLeft: INSET,
+            paddingRight: INSET,
+            clipPath: `polygon(0 0, 43% 0, 56% ${TAB_H}px, 100% ${TAB_H}px, 100% 100%, 0 100%)`,
+          }}
+          className={`relative flex flex-col pb-4 ${styles.cardBg}`}
         >
-          {CATEGORY_LABELS[category]}
-        </p>
-        {/* `dir` on the title text only — never on the body. Putting it on the
-            container mirrors the whole card (tab on the right, pill on the
-            right) for a Hebrew recipe, and the app's chrome stays LTR
-            regardless of recipe language. */}
-        <p
-          dir={dirFor(recipe.title)}
-          className={`mt-1 line-clamp-2 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
-        >
-          {recipe.title}
-        </p>
-        {stat && (
-          // Figma's pill is 420 wide on a 697-wide body (≈60%) with centred
-          // Geist Mono Medium text, so this is a min-width + centred pill
-          // rather than one that hugs its content. `mt-auto` pins it to the
-          // bottom so pills line up across cards whose titles wrap to
-          // different numbers of lines.
-          <span
-            style={{ minWidth: u(420) }}
-            className={`mt-auto inline-block self-start rounded-full px-3 pt-[3px] pb-[4px] text-center font-mono text-[10px] font-medium ${styles.pillBg} ${styles.pillText}`}
+          <p
+            style={{ height: TAB_H }}
+            className={`flex items-center font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
           >
-            {stat}
-          </span>
-        )}
+            {CATEGORY_LABELS[category]}
+          </p>
+          {/* `dir` on the title text only — never on the body. Putting it on the
+              container mirrors the whole card (tab on the right, pill on the
+              right) for a Hebrew recipe, and the app's chrome stays LTR
+              regardless of recipe language. */}
+          <p
+            dir={dirFor(recipe.title)}
+            className={`mt-1 line-clamp-2 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
+          >
+            {recipe.title}
+          </p>
+          {stat && (
+            // Figma's pill is 420 wide on a 697-wide body (≈60%) with centred
+            // Geist Mono Medium text, so this is a min-width + centred pill
+            // rather than one that hugs its content. `mt-auto` pins it to the
+            // bottom so pills line up across cards whose titles wrap to
+            // different numbers of lines.
+            <span
+              style={{ minWidth: u(420) }}
+              className={`mt-auto inline-block self-start rounded-full px-3 pt-[3px] pb-[4px] text-center font-mono text-[10px] font-medium ${styles.pillBg} ${styles.pillText}`}
+            >
+              {stat}
+            </span>
+          )}
+        </div>
+      </Link>
+
+      {/* Mirrors the needs-review/nutrition badge's inset on the opposite
+          edge so the two sit on one line across the top of the photo.
+          Deliberately quiet — a small translucent glyph, not a red button.
+          Deleting a recipe is rare and the confirm dialog is the real
+          safeguard, so this only needs to be findable, not prominent. */}
+      <div style={{ right: INSET, top: u(40) }} className="absolute z-10">
+        <DeleteRecipe recipeId={recipe.id} title={recipe.title} variant="icon" />
       </div>
-    </Link>
+    </div>
   );
 }

@@ -135,10 +135,21 @@
   --font-mono: var(--font-mono);
 }
 
+/* Kills the rubber-band overscroll at the top and bottom of the document.
+   That bounce translates the whole scrolling box, and iOS drags
+   `position: fixed` children along with it before snapping them back — which
+   is exactly the "bottom nav doesn't stay put when I scroll up" symptom.
+   Scoped to the vertical axis so the home page's horizontal recipe strip
+   keeps its own overscroll behaviour. */
+html {
+  overscroll-behavior-y: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), ui-rounded, system-ui, sans-serif;
+  overscroll-behavior-y: none;
 }
 
 /* Headings use Poppins SemiBold per the Figma style guide (task #24) — body

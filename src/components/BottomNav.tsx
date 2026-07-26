@@ -29,7 +29,19 @@ export function BottomNav() {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-20 flex justify-center px-5"
-      style={{ paddingBottom: "max(env(safe-area-inset-bottom), 1rem)" }}
+      style={{
+        paddingBottom: "max(env(safe-area-inset-bottom), 1rem)",
+        // Forces the bar onto its own compositor layer. A `position: fixed`
+        // element that also has a backdrop-filter (the frosted-glass pill
+        // below) is repainted by iOS Safari in step with the scrolling
+        // content instead of being composited independently, so it visibly
+        // lags or drifts during a momentum scroll and only settles once the
+        // scroll ends. Promoting it means the compositor just holds it in
+        // place. Paired with `overscroll-behavior-y: none` in globals.css,
+        // which stops the rubber-band bounce that causes the same symptom.
+        transform: "translateZ(0)",
+        willChange: "transform",
+      }}
     >
       <div className="relative flex w-full max-w-sm items-center rounded-full border border-white/60 bg-white/55 px-2 py-3 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl">
         <div className="flex flex-1 justify-center">
