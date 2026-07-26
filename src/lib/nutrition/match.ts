@@ -86,7 +86,10 @@ export async function matchIngredientNutrition(
       fat_g: estimate.fat_g,
       fiber_g: estimate.fiber_g,
       sugar_g: estimate.sugar_g,
-      grams_resolved: null,
+      // The model states the weight its own numbers describe, so this path
+      // now contributes to the recipe's per-100g denominator instead of
+      // silently dropping out of it. See estimateNutrition.
+      grams_resolved: estimate.grams,
       fdc_source: "none",
       is_estimated: true,
     };
