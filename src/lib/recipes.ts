@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { matchIngredientNutrition } from "./nutrition/match";
+import { isUndefinedColumn } from "./pgErrors";
 import type { ParsedRecipe } from "./types";
 
 // Resolve the single household id, creating it on first use if it doesn't
@@ -39,25 +40,33 @@ export async function saveParsedRecipe(
   parsed: ParsedRecipe,
   createdBy: string | null,
 ): Promise<{ id: string }> {
-  const { data: recipe, error } = await supabase
-    .from("recipe")
-    .insert({
-      household_id: householdId,
-      title: parsed.title,
-      source_url: parsed.source_url,
-      source_type: parsed.source_type,
-      cover_image_url: parsed.cover_image_url,
-      servings: parsed.servings,
-      total_time_min: parsed.total_time_min,
-      cuisine: parsed.cuisine,
-      primary_language: parsed.primary_language,
-      needs_review: parsed.needs_review,
-      raw_capture: parsed.raw_capture,
-      created_by: createdBy,
-      status: "to_try",
-    })
-    .select("id")
-    .single();
+  const row = {
+    household_id: householdId,
+    title: parsed.title,
+    source_url: parsed.source_url,
+    source_type: parsed.source_type,
+    cover_image_url: parsed.cover_image_url,
+    servings: parsed.servings,
+    total_time_min: parsed.total_time_min,
+    cuisine: parsed.cuisine,
+    primary_language: parsed.primary_language,
+    needs_review: parsed.needs_review,
+    raw_capture: parsed.raw_capture,
+    created_by: createdBy,
+    status: "to_try",
+  };
+
+  const insert = (values: Record<string, unknown>) =>
+    supabase.from("recipe").insert(values).select("id").single();
+
+  let { data: recipe, error } = await insert({ ...row, author: parsed.author });
+  if (isUndefinedColumn(error)) {
+    // Migration 0006 (author) hasn't been applied to this database yet.
+    // Saving a recipe is the whole point of the app, so it goes ahead
+    // without the attribution rather than failing — the column starts being
+    // written the moment the migration lands, no code change needed.
+    ({ data: recipe, error } = await insert(row));
+  }
 
   if (error || !recipe) {
     throw new Error(error?.message ?? "Failed to create recipe");
@@ -138,6 +147,18 @@ async function insertRecipeContent(
  *     image, servings, time and cuisine are only taken from the parse when it
  *     actually found one, so hand-corrections survive a retry.
  */
+/** The subset of an existing row `reimportRecipe` needs, so it can tell a
+ *  field the user filled in by hand from one the re-parse should supply. */
+interface ExistingRecipe {
+  id: string;
+  title: string;
+  source_url: string | null;
+  cover_image_url: string | null;
+  servings: number | null;
+  total_time_min: number | null;
+  cuisine: string | null;
+}
+
 export async function reimportRecipe(
   supabase: SupabaseClient,
   recipeId: string,
@@ -146,7 +167,7 @@ export async function reimportRecipe(
     .from("recipe")
     .select("id,title,source_url,cover_image_url,servings,total_time_min,cuisine")
     .eq("id", recipeId)
-    .maybeSingle();
+    .maybeSingle<ExistingRecipe>();
 
   if (!recipe) return { ok: false, message: "That recipe isn't here anymore." };
   if (!recipe.source_url) {
@@ -172,23 +193,32 @@ export async function reimportRecipe(
   const { error: delStepErr } = await supabase.from("step").delete().eq("recipe_id", recipeId);
   if (delStepErr) return { ok: false, message: "Couldn't refresh that one. Try again?" };
 
-  const { error: updErr } = await supabase
-    .from("recipe")
-    .update({
-      // `??` not `||` on the title: "Saved recipe" is what the parser returns
-      // when it found no title, and that shouldn't clobber a better existing
-      // one — but `cleanTitle` already turned junk into null upstream, so a
-      // non-default title here is genuinely better than what's stored.
-      title: parsed.title === "Saved recipe" ? recipe.title : parsed.title,
-      cover_image_url: parsed.cover_image_url ?? recipe.cover_image_url,
-      servings: parsed.servings ?? recipe.servings,
-      total_time_min: parsed.total_time_min ?? recipe.total_time_min,
-      cuisine: parsed.cuisine ?? recipe.cuisine,
-      primary_language: parsed.primary_language,
-      needs_review: parsed.needs_review,
-      raw_capture: parsed.raw_capture,
-    })
-    .eq("id", recipeId);
+  const update = {
+    // `??` not `||` on the title: "Saved recipe" is what the parser returns
+    // when it found no title, and that shouldn't clobber a better existing
+    // one — but `cleanTitle` already turned junk into null upstream, so a
+    // non-default title here is genuinely better than what's stored.
+    title: parsed.title === "Saved recipe" ? recipe.title : parsed.title,
+    cover_image_url: parsed.cover_image_url ?? recipe.cover_image_url,
+    servings: parsed.servings ?? recipe.servings,
+    total_time_min: parsed.total_time_min ?? recipe.total_time_min,
+    cuisine: parsed.cuisine ?? recipe.cuisine,
+    primary_language: parsed.primary_language,
+    needs_review: parsed.needs_review,
+    raw_capture: parsed.raw_capture,
+  };
+
+  const applyUpdate = (values: Record<string, unknown>) =>
+    supabase.from("recipe").update(values).eq("id", recipeId);
+
+  // Only set the author when the re-parse actually found one, same rule as
+  // every other field here — a retry must never blank out something already
+  // there. Falls back to the author-less update if migration 0006 is still
+  // pending; see saveParsedRecipe.
+  let { error: updErr } = await applyUpdate(
+    parsed.author ? { ...update, author: parsed.author } : update,
+  );
+  if (isUndefinedColumn(updErr)) ({ error: updErr } = await applyUpdate(update));
   if (updErr) return { ok: false, message: "Couldn't refresh that one. Try again?" };
 
   await insertRecipeContent(supabase, recipeId, parsed);

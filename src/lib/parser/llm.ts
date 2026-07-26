@@ -23,7 +23,7 @@ const TIMEOUT_MS = 30_000;
 
 // `servings` and `total_time_min` are deliberately NOT in `required`: a
 // caption very often states neither, and forcing the field makes the model
-// invent one. Same for `cuisine`.
+// invent one. Same for `cuisine` and `author`.
 const RESPONSE_SCHEMA = {
   type: "OBJECT",
   properties: {
@@ -31,6 +31,7 @@ const RESPONSE_SCHEMA = {
     servings: { type: "INTEGER" },
     total_time_min: { type: "INTEGER" },
     cuisine: { type: "STRING" },
+    author: { type: "STRING" },
     ingredients: { type: "ARRAY", items: { type: "STRING" } },
     steps: { type: "ARRAY", items: { type: "STRING" } },
     is_recipe: { type: "BOOLEAN" },
@@ -44,9 +45,10 @@ Rules:
 - Preserve the ORIGINAL LANGUAGE of the source. If the recipe is in Hebrew, every ingredient and step must stay in Hebrew. Never translate.
 - "ingredients": one entry per ingredient line, keeping the quantity and unit exactly as written. If the recipe is split into sections (e.g. "for the meatballs" / "for the sauce"), prefix each entry with its section name followed by " — " so the grouping survives.
 - "steps": one entry per discrete instruction, in order. Split a run-on instruction paragraph into separate steps at the natural boundaries. Do not number them; the app numbers them.
-- Do NOT invent anything. Omit "servings", "total_time_min" and "cuisine" entirely unless the source actually states or clearly implies them. Never output a placeholder like 0 or "unknown".
+- Do NOT invent anything. Omit "servings", "total_time_min", "cuisine" and "author" entirely unless the source actually states or clearly implies them. Never output a placeholder like 0 or "unknown".
 - Strip social-media chatter: hashtags, "follow for more", tagged accounts, like/comment counts, emoji-only lines. Keep genuine cooking notes as steps.
 - "title": the name of the dish that is ACTUALLY BEING MADE, in the source language. Work it out from the ingredients and steps — do not just copy the headline. Publishers pad headlines with editorial framing that says nothing about the food ("המדריך:", "מתכון:", "The Guide:", "Recipe:", "How to make", "You have to try this"), plus author handles, hashtags and clickbait. Strip all of it and keep only the dish. Example: a page headlined "המדריך: תבשיל אסאדו בבצלים וסילאן" is a recipe for "תבשיל אסאדו בבצלים וסילאן" — "המדריך" is not part of the dish name. If the headline names no dish at all, name the dish yourself from what is being cooked.
+- "author": who cooked or wrote this, if the source names them — a byline ("Yotam Ottolenghi"), a chef named in the text, or the social handle that posted it ("@sarahcooks"). Give the name as written, nothing else: no "by", no "recipe by", no title, no bio. Omit the field entirely if the source names nobody. Do NOT use the publication, website, blog or brand name — "Bon Appétit" and "Instagram" are not people.
 - "is_recipe": false if the source contains no actual recipe (just a photo caption, a login page, an ad). When false, leave the arrays empty.`;
 
 export interface LlmRecipe {
@@ -54,6 +56,7 @@ export interface LlmRecipe {
   servings: number | null;
   total_time_min: number | null;
   cuisine: string | null;
+  author: string | null;
   ingredients: string[];
   steps: string[];
 }
@@ -63,6 +66,7 @@ interface RawLlmRecipe {
   servings?: unknown;
   total_time_min?: unknown;
   cuisine?: unknown;
+  author?: unknown;
   ingredients?: unknown;
   steps?: unknown;
   is_recipe?: unknown;
@@ -129,9 +133,27 @@ async function extract(parts: GeminiPart[]): Promise<LlmRecipe | null> {
     total_time_min: positiveInt(raw.total_time_min),
     cuisine:
       typeof raw.cuisine === "string" && raw.cuisine.trim() ? raw.cuisine.trim() : null,
+    author: cleanAuthor(raw.author),
     ingredients,
     steps,
   };
+}
+
+// The prompt says "the name as written, nothing else", and the model mostly
+// complies — but "Recipe by Sarah Cohen" and "By @sarahcooks" still come back
+// often enough to be worth stripping here rather than hoping. Anything long
+// is a sentence that slipped past the instruction, not a byline.
+const AUTHOR_LEAD = /^(?:recipe\s+)?by[:\s]+/i;
+const MAX_AUTHOR_LEN = 60;
+
+function cleanAuthor(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const clean = v.trim().replace(AUTHOR_LEAD, "").trim();
+  if (!clean || clean.length > MAX_AUTHOR_LEN) return null;
+  // "unknown"/"n/a" is the model answering the field rather than omitting it,
+  // which the prompt asks it not to do — treat them as the omission.
+  if (/^(unknown|n\/?a|none|null)$/i.test(clean)) return null;
+  return clean;
 }
 
 function stringList(v: unknown): string[] {

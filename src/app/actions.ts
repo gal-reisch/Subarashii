@@ -140,6 +140,7 @@ export async function addManualAction(formData: FormData) {
     servings,
     total_time_min: null,
     cuisine: null,
+    author: null,
     primary_language: majorityLang([
       ...ingredients.map((i) => i.raw_text),
       ...steps.map((s) => s.text),

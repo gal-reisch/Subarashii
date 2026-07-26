@@ -29,6 +29,9 @@ export interface ParsedRecipe {
   servings: number | null;
   total_time_min: number | null;
   cuisine: string | null;
+  /** Who wrote or cooked it, when the source said so. See migration
+   *  0006_author.sql — the card renders it under the title. */
+  author: string | null;
   primary_language: Lang | null;
   ingredients: ParsedIngredient[];
   steps: ParsedStep[];
@@ -53,6 +56,7 @@ export interface RecipeRow {
   servings: number | null;
   total_time_min: number | null;
   cuisine: string | null;
+  author: string | null;
   primary_language: Lang | null;
   status: "to_try" | "made";
   needs_review: boolean;

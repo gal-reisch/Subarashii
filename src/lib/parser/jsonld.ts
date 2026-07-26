@@ -8,6 +8,7 @@ export interface JsonLdRecipe {
   servings: number | null;
   totalTimeMin: number | null;
   cuisine: string | null;
+  author: string | null;
   ingredients: string[];
   steps: string[];
 }
@@ -33,6 +34,34 @@ function collectNodes(data: unknown, out: Json[]): void {
     out.push(node);
     if (Array.isArray(node["@graph"])) collectNodes(node["@graph"], out);
   }
+}
+
+// schema.org `author` is either a string, a Person/Organization object with a
+// `name`, or an array of those — sites use all three. Only the name is wanted;
+// the rest of a Person node is a URL and a photo the card has no room for.
+//
+// The first entry wins on an array. Multi-author recipes exist, but the card
+// has one line for this and "Alice Smith and 3 others" is worse than "Alice
+// Smith" — the detail page links to the source for anyone who cares.
+const MAX_AUTHOR_LEN = 60;
+
+function parseAuthor(author: unknown): string | null {
+  const first = Array.isArray(author) ? author[0] : author;
+  if (!first) return null;
+
+  const name =
+    typeof first === "string"
+      ? first
+      : typeof first === "object" && typeof (first as Json).name === "string"
+        ? ((first as Json).name as string)
+        : null;
+  if (!name) return null;
+
+  const clean = inlineText(name).trim();
+  // A few CMSs emit the site's own name here, or a whole bio paragraph.
+  // Neither is a byline, and both would push the title off the card.
+  if (!clean || clean.length > MAX_AUTHOR_LEN) return null;
+  return clean;
 }
 
 function parseImage(img: unknown): string | null {
@@ -155,6 +184,7 @@ export function extractRecipeFromHtml(html: string): JsonLdRecipe | null {
     servings: parseServings(recipe.recipeYield),
     totalTimeMin: totalTime,
     cuisine,
+    author: parseAuthor(recipe.author),
     ingredients: parseIngredients(recipe.recipeIngredient ?? recipe.ingredients),
     steps: parseInstructions(recipe.recipeInstructions),
   };

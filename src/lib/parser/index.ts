@@ -76,6 +76,7 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
     servings: jr.servings,
     total_time_min: jr.totalTimeMin,
     cuisine: jr.cuisine,
+    author: jr.author,
     primary_language: majorityLang([
       ...ingredients.map((i) => i.raw_text),
       ...steps.map((s) => s.text),
@@ -143,6 +144,7 @@ async function ogFallback($: cheerio.CheerioAPI, url: string): Promise<ParsedRec
     servings: null,
     total_time_min: null,
     cuisine: null,
+    author: null,
     primary_language: null,
     ingredients: [],
     steps: [],
@@ -189,6 +191,7 @@ function applyLlmRecipe(
     servings: llm.servings ?? base.servings,
     total_time_min: llm.total_time_min ?? base.total_time_min,
     cuisine: llm.cuisine ?? base.cuisine,
+    author: llm.author ?? base.author,
     primary_language:
       majorityLang([
         ...ingredients.map((i) => i.raw_text),
@@ -241,6 +244,7 @@ export function heuristicFromText(
     servings: null,
     total_time_min: null,
     cuisine: null,
+    author: null,
     primary_language: majorityLang([text]),
     ingredients,
     steps,
@@ -350,6 +354,7 @@ function stub(url: string): ParsedRecipe {
     servings: null,
     total_time_min: null,
     cuisine: null,
+    author: null,
     primary_language: null,
     ingredients: [],
     steps: [],
