@@ -46,7 +46,7 @@ export default async function CollectionsPage() {
           />
           <button
             type="submit"
-            className="shrink-0 rounded-2xl bg-accent px-5 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] active:scale-95"
+            className="shrink-0 rounded-2xl bg-accent px-5 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] active:scale-95"
           >
             Create
           </button>

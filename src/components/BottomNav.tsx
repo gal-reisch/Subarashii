@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { signOutAction } from "@/app/actions";
+import { HeartIcon } from "@/components/HeartIcon";
 
 // Fixed bottom tab bar, rebuilt to match the user's Figma `Nav Bar` component
 // (file "Subarashii", node 1521:1044) verified via the Figma API — NOT the
@@ -39,7 +40,7 @@ export function BottomNav() {
 
         <div className="flex flex-1 justify-center">
           <NavIcon href="/favorites" label="Favorites" active={isFavorites}>
-            <HeartIcon active={isFavorites} />
+            <HeartIcon filled={isFavorites} />
           </NavIcon>
         </div>
 
@@ -128,23 +129,6 @@ function HomeIcon({ active }: { active: boolean }) {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
       <path
         d="M4 10.5 12 4l8 6.5V19a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8.5Z"
-        fill={active ? "currentColor" : "none"}
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-// Heart for the Favorites tab — outline when inactive, filled when the
-// /favorites route is active (matching the Figma component's filled-pink
-// heart in its selected state).
-function HeartIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <path
-        d="M12 20s-7-4.35-9.33-8.5C1.1 8.6 2.5 5.5 5.6 5.5c1.9 0 3.2 1.1 4.4 2.6 1.2-1.5 2.5-2.6 4.4-2.6 3.1 0 4.5 3.1 2.93 6C19 15.65 12 20 12 20Z"
         fill={active ? "currentColor" : "none"}
         stroke="currentColor"
         strokeWidth="1.8"

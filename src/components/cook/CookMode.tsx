@@ -108,7 +108,7 @@ export function CookMode({
                     onClick={() =>
                       start(`Step ${stepIndex + 1}`, current.detected_timer_seconds!)
                     }
-                    className="mt-6 rounded-full bg-accent px-5 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] active:scale-95"
+                    className="mt-6 rounded-full bg-accent px-5 py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] active:scale-95"
                   >
                     ⏱ Start {formatClock(current.detected_timer_seconds)} timer
                   </button>
@@ -126,7 +126,7 @@ export function CookMode({
                 <button
                   onClick={() => setStepIndex((i) => Math.min(steps.length - 1, i + 1))}
                   disabled={stepIndex === steps.length - 1}
-                  className="flex-1 rounded-full bg-accent py-4 text-lg font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] disabled:opacity-30 active:scale-95"
+                  className="flex-1 rounded-full bg-accent py-4 text-lg font-bold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] disabled:opacity-30 active:scale-95"
                 >
                   Next →
                 </button>
@@ -139,9 +139,18 @@ export function CookMode({
               const checked = checkedIngredients.has(ing.id);
               return (
                 <li key={ing.id}>
+                  {/* `dir` sits on the button (the flex container), not on the
+                      text span, so the check circle mirrors to the right of a
+                      Hebrew ingredient instead of staying pinned left with the
+                      text jammed against it — same reasoning as the numbered
+                      step badges on the recipe detail page. `text-start`
+                      rather than `text-left` for the same reason: `text-left`
+                      is a hardcoded physical direction that silently defeats
+                      any inherited RTL. */}
                   <button
                     onClick={() => toggleIngredient(ing.id)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left shadow-[0px_4px_14px_rgba(0,0,0,0.05)] transition ${
+                    dir={dirFor(ing.raw_text)}
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-start shadow-[0px_4px_14px_rgba(0,0,0,0.05)] transition ${
                       checked ? "bg-border/40 text-muted line-through" : "bg-card"
                     }`}
                   >
@@ -152,9 +161,7 @@ export function CookMode({
                     >
                       {checked ? "✓" : ""}
                     </span>
-                    <span dir={dirFor(ing.raw_text)} className="text-[15px]">
-                      {ing.raw_text}
-                    </span>
+                    <span className="text-[15px]">{ing.raw_text}</span>
                   </button>
                 </li>
               );

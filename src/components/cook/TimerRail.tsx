@@ -139,7 +139,7 @@ function CustomTimerSheet({
           </button>
           <button
             onClick={() => onStart(label.trim() || "Timer", minutes * 60)}
-            className="flex-1 rounded-full bg-accent py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(191,74,26,0.4)] active:scale-95"
+            className="flex-1 rounded-full bg-accent py-3 font-bold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] active:scale-95"
           >
             Start
           </button>

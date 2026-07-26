@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { normalizeImageUrl } from "@/lib/imageUrl";
 import { detectLang, type Lang } from "@/lib/lang";
 import { parseInput } from "@/lib/parser";
 import { classifyStepKind } from "@/lib/parser/stepKind";
@@ -44,7 +45,9 @@ export async function addManualAction(formData: FormData) {
   const servingsRaw = String(formData.get("servings") ?? "").trim();
   const servingsNum = parseInt(servingsRaw, 10);
   const servings = servingsRaw && !Number.isNaN(servingsNum) ? servingsNum : null;
-  const coverUrl = String(formData.get("cover_image_url") ?? "").trim() || null;
+  // Unwraps a pasted Google-Images result link into the actual image URL, and
+  // drops anything that isn't http(s). See lib/imageUrl.ts.
+  const coverUrl = normalizeImageUrl(String(formData.get("cover_image_url") ?? ""));
 
   const ingredients = String(formData.get("ingredients") ?? "")
     .split(/\r?\n/)

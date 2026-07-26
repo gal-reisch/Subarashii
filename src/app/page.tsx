@@ -1,6 +1,7 @@
 import { BottomNav } from "@/components/BottomNav";
 import { LinkButton } from "@/components/Button";
 import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
+import { normalizeImageUrl } from "@/lib/imageUrl";
 import { computeNutritionTotals, getNutritionFlags } from "@/lib/nutritionCalc";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -43,7 +44,10 @@ export default async function Home() {
     return {
       id: r.id,
       title: r.title,
-      cover_image_url: r.cover_image_url,
+      // Normalized at render time, not just at save time, so recipes stored
+      // with a Google-Images result link (which renders as a broken-image
+      // icon) fix themselves without being re-saved. See lib/imageUrl.ts.
+      cover_image_url: normalizeImageUrl(r.cover_image_url),
       source_type: r.source_type,
       needs_review: r.needs_review,
       total_time_min: r.total_time_min,

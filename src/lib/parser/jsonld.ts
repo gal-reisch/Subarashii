@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { isoDurationToMinutes, parseServings } from "./duration";
+import { mergeUnclosedParenStrings } from "./mergeSteps";
 
 export interface JsonLdRecipe {
   title: string | null;
@@ -60,12 +61,17 @@ function splitInstructionString(raw: string): string[] {
     .replace(/<\s*br\s*\/?\s*>/gi, "\n")
     .replace(/<\/(?:p|div|li|h[1-6])>/gi, "\n");
   const text = cheerio.load(`<div>${withBreaks}</div>`)("div").text();
-  return text
+  const parts = text
     // Split on real line breaks, or "end-of-sentence + space + next word".
     // Requiring a following letter avoids breaking decimals like "1.5".
     .split(/\r?\n+|(?<=[.!?])\s+(?=[\p{L}])/u)
     .map((s) => s.replace(/\s+/g, " ").trim())
     .filter(Boolean);
+
+  // Re-join fragments that were split inside an unclosed parenthesis. See
+  // `mergeSteps.ts` — the same rule runs again at render time over stored
+  // rows, so recipes saved before this fix get repaired too.
+  return mergeUnclosedParenStrings(parts);
 }
 
 function parseInstructions(ri: unknown): string[] {

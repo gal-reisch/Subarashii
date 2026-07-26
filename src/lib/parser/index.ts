@@ -5,6 +5,7 @@ import type { ParsedRecipe, SourceType } from "../types";
 import { extractRecipeFromHtml, type JsonLdRecipe } from "./jsonld";
 import { classifyStepKind } from "./stepKind";
 import { splitFreeText } from "./text";
+import { cleanTitle, pickTitle } from "./title";
 
 function detectSourceType(url: string): SourceType {
   try {
@@ -37,7 +38,9 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
   }));
 
   return {
-    title: jr.title || "Saved recipe",
+    // Even structured JSON-LD titles carry site attribution
+    // ("Crème Brûlée | Some Food Blog"), so they go through the same cleaner.
+    title: cleanTitle(jr.title) ?? "Saved recipe",
     source_url: url,
     source_type: url ? detectSourceType(url) : "other",
     cover_image_url: jr.image,
@@ -59,10 +62,21 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
 // flag for review so the link is never lost.
 function ogFallback(html: string, url: string): ParsedRecipe {
   const $ = cheerio.load(html);
+  // Candidates in descending trustworthiness. The description entries matter
+  // most for social posts: Instagram's og:title is often literally
+  // "Instagram" (or a login-wall title) while its og:description still
+  // carries the caption — which starts with the dish name. Falling through
+  // to the caption is what stops a saved reel from being called "Instagram".
   const title =
-    $('meta[property="og:title"]').attr("content") ||
-    $("title").text().trim() ||
-    "Saved recipe";
+    pickTitle([
+      $('meta[property="og:title"]').attr("content"),
+      $('meta[name="twitter:title"]').attr("content"),
+      $('meta[property="og:description"]').attr("content"),
+      $('meta[name="twitter:description"]').attr("content"),
+      $('meta[name="description"]').attr("content"),
+      $("h1").first().text(),
+      $("title").text(),
+    ]) ?? "Saved recipe";
   const image =
     $('meta[property="og:image"]').attr("content") ||
     $('meta[name="twitter:image"]').attr("content") ||
@@ -101,7 +115,7 @@ export function parseFromText(
   }));
 
   return {
-    title: split.title,
+    title: cleanTitle(split.title) ?? "Saved recipe",
     source_url: null,
     source_type: sourceType,
     cover_image_url: null,

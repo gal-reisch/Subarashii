@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
+import { normalizeImageUrl } from "@/lib/imageUrl";
 import { dirFor } from "@/lib/lang";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -86,17 +87,21 @@ export default async function CollectionPage({
           </p>
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-5">
-            {recipes.map((r) => (
+            {recipes.map((r) => {
+              // See lib/imageUrl.ts — unwraps a stored Google-Images result
+              // link, which would otherwise render as a broken-image icon.
+              const cover = normalizeImageUrl(r.cover_image_url);
+              return (
               <div key={r.id} className="group relative flex flex-col">
                 <Link
                   href={`/recipe/${r.id}`}
                   className="flex flex-1 flex-col items-center rounded-[28px] bg-card px-4 pb-4 pt-6 text-center shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
                 >
                   <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-accent/10">
-                    {r.cover_image_url ? (
+                    {cover ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={r.cover_image_url}
+                        src={cover}
                         alt=""
                         className="h-full w-full object-cover"
                       />
@@ -133,7 +138,8 @@ export default async function CollectionPage({
                   </button>
                 </form>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

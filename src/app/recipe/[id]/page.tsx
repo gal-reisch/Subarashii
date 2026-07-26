@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
+import { HeartIcon } from "@/components/HeartIcon";
 import { LinkButton } from "@/components/Button";
 import { NutritionChips } from "@/components/NutritionChips";
 import { toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
-import { dirFor } from "@/lib/lang";
+import { normalizeImageUrl } from "@/lib/imageUrl";
+import { dirFor, isRtl } from "@/lib/lang";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
+import { mergeUnclosedParens } from "@/lib/parser/mergeSteps";
+import { classifyStepKind } from "@/lib/parser/stepKind";
 import { createServiceClient } from "@/lib/supabase/service";
 
 interface Ingredient {
@@ -65,9 +69,26 @@ export default async function RecipePage({
   const memberIds = new Set((memberships ?? []).map((m) => m.collection_id));
   const nutritionTotals = computeNutritionTotals(ings, recipe.servings);
 
+  // Direction for the whole recipe view, not just its individual text lines.
+  // Per-line `dir` (below) already got Hebrew text rendering right-to-left,
+  // but the *layout* stayed left-to-right: section headings ("Ingredients",
+  // "Steps") sat on the left of an otherwise right-aligned Hebrew recipe,
+  // which reads as broken to a Hebrew speaker. Setting dir on the container
+  // mirrors headings, list indentation and flex order together.
+  //
+  // Driven by the recipe's detected `primary_language` (a majority vote over
+  // its ingredients and steps) rather than the title alone, so an English
+  // title on a Hebrew recipe doesn't flip the whole page back. The per-line
+  // `dirFor` calls stay exactly as they are — they're what keeps an
+  // individual English ingredient readable inside an RTL recipe.
+  const rtl = recipe.primary_language === "he" || isRtl(recipe.title);
+  // See lib/imageUrl.ts — unwraps a stored Google-Images result link so an
+  // already-saved recipe stops rendering a broken-image icon.
+  const coverImageUrl = normalizeImageUrl(recipe.cover_image_url);
+
   return (
     <div className="min-h-full">
-      <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
+      <main dir={rtl ? "rtl" : "ltr"} className="mx-auto max-w-2xl px-5 pb-32 pt-6">
         <div className="flex items-center justify-between">
           <BackButton href="/" label="Back to the box" />
           {/* Favorite toggle (task #24) — plain-submit form, no client JS.
@@ -82,23 +103,15 @@ export default async function RecipePage({
               aria-pressed={!!recipe.is_favorite}
               className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition active:scale-90"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M12 20s-7-4.35-9.33-8.5C1.1 8.6 2.5 5.5 5.6 5.5c1.9 0 3.2 1.1 4.4 2.6 1.2-1.5 2.5-2.6 4.4-2.6 3.1 0 4.5 3.1 2.93 6C19 15.65 12 20 12 20Z"
-                  fill={recipe.is_favorite ? "currentColor" : "none"}
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <HeartIcon filled={!!recipe.is_favorite} />
             </button>
           </form>
         </div>
 
-        {recipe.cover_image_url && (
+        {coverImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={recipe.cover_image_url}
+            src={coverImageUrl}
             alt=""
             className="mt-5 aspect-[16/10] w-full rounded-[28px] object-cover shadow-[0px_20px_50px_rgba(0,0,0,0.12)]"
           />
@@ -212,9 +225,31 @@ export default async function RecipePage({
           // cross-promotion the parser is fairly confident isn't part of
           // this recipe at all — kept out of the way behind a disclosure
           // rather than deleted, since the classifier is a best-effort guess.
-          const instructions = stps.filter((s) => s.kind === "instruction");
-          const tips = stps.filter((s) => s.kind === "tip");
-          const ignored = stps.filter((s) => s.kind === "ignored");
+          // Classified from the text on every render rather than read from
+          // the stored `kind` column. That column is only written at save
+          // time, so recipes saved before the classifier shipped have every
+          // row marked "instruction" — which is why a recipe like the crème
+          // brûlée one numbered "click here for my meringue recipe" as step
+          // 14. Deriving here applies the current rules retroactively to the
+          // whole box, with no migration or backfill.
+          // Same reasoning applies to steps torn in half mid-parenthetical:
+          // the parser only stopped doing that recently, so stitch stored
+          // rows back together here rather than migrating the table. Keeps
+          // the first row's id and whichever timer was detected first.
+          const whole = mergeUnclosedParens(
+            stps,
+            (s) => s.text,
+            (prev, next) => ({
+              ...prev,
+              text: `${prev.text} ${next.text}`,
+              detected_timer_seconds:
+                prev.detected_timer_seconds ?? next.detected_timer_seconds,
+            }),
+          );
+          const classified = whole.map((s) => ({ ...s, kind: classifyStepKind(s.text) }));
+          const instructions = classified.filter((s) => s.kind === "instruction");
+          const tips = classified.filter((s) => s.kind === "tip");
+          const ignored = classified.filter((s) => s.kind === "ignored");
 
           return (
             <section className="mt-8">
