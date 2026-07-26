@@ -6,8 +6,8 @@ import { LinkButton } from "@/components/Button";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
 import { RetryImport } from "@/components/RetryImport";
+import { ShelfPicker } from "@/components/ShelfPicker";
 import { setServingsAction, toggleFavoriteAction } from "@/app/actions";
-import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { dirFor } from "@/lib/lang";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
@@ -87,21 +87,33 @@ export default async function RecipePage({
       <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
         <div className="flex items-center justify-between">
           <BackButton href="/" label="Back to the box" />
-          {/* Favorite toggle (task #24) — plain-submit form, no client JS.
+          {/* The two "where does this belong" controls, side by side. Shelves
+              used to be a full labelled section under Start Cooking; it does
+              the same job as the heart at a fraction of the frequency, so it
+              sits next to it instead of taking a slab of the page.
+
+              The favorite toggle is a plain-submit form, no client JS.
               `recipe.is_favorite` is undefined until migration 0005 is
               applied; treat that as not-favorited. */}
-          <form action={toggleFavoriteAction}>
-            <input type="hidden" name="recipe_id" value={recipe.id} />
-            <input type="hidden" name="is_favorite" value={String(!!recipe.is_favorite)} />
-            <button
-              type="submit"
-              aria-label={recipe.is_favorite ? "Remove from favorites" : "Add to favorites"}
-              aria-pressed={!!recipe.is_favorite}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition active:scale-90"
-            >
-              <HeartIcon filled={!!recipe.is_favorite} />
-            </button>
-          </form>
+          <div className="flex items-center gap-1">
+            <ShelfPicker
+              recipeId={recipe.id}
+              shelves={cols}
+              memberIds={[...memberIds]}
+            />
+            <form action={toggleFavoriteAction}>
+              <input type="hidden" name="recipe_id" value={recipe.id} />
+              <input type="hidden" name="is_favorite" value={String(!!recipe.is_favorite)} />
+              <button
+                type="submit"
+                aria-label={recipe.is_favorite ? "Remove from favorites" : "Add to favorites"}
+                aria-pressed={!!recipe.is_favorite}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition active:scale-90"
+              >
+                <HeartIcon filled={!!recipe.is_favorite} />
+              </button>
+            </form>
+          </div>
         </div>
 
         {coverImageUrl && (
@@ -157,47 +169,6 @@ export default async function RecipePage({
             {recipe.source_url && <RetryImport recipeId={recipe.id} />}
           </div>
         )}
-
-        <section className="mt-8">
-          <h2 className="text-[15px] font-bold">Shelves</h2>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {cols.map((c) => {
-              const isMember = memberIds.has(c.id);
-              return (
-                <form key={c.id} action={toggleRecipeInCollectionAction}>
-                  <input type="hidden" name="recipe_id" value={recipe.id} />
-                  <input type="hidden" name="collection_id" value={c.id} />
-                  <input type="hidden" name="is_member" value={String(isMember)} />
-                  <button
-                    type="submit"
-                    className={`rounded-full px-3 py-1.5 text-sm font-semibold transition active:scale-95 ${
-                      isMember
-                        ? "bg-accent text-accent-ink"
-                        : "bg-card text-foreground shadow-[0px_4px_14px_rgba(0,0,0,0.06)]"
-                    }`}
-                  >
-                    {isMember ? "✓ " : "+ "}
-                    {c.name}
-                  </button>
-                </form>
-              );
-            })}
-          </div>
-          <form action={createCollectionAction} className="mt-2 flex gap-2">
-            <input type="hidden" name="recipe_id" value={recipe.id} />
-            <input
-              name="name"
-              placeholder="New shelf…"
-              className="min-w-0 flex-1 rounded-full bg-card px-3 py-1.5 text-sm shadow-[0px_4px_14px_rgba(0,0,0,0.06)] outline-none"
-            />
-            <button
-              type="submit"
-              className="shrink-0 rounded-full bg-card px-3 py-1.5 text-sm font-semibold text-accent shadow-[0px_4px_14px_rgba(0,0,0,0.06)] active:scale-95"
-            >
-              Create
-            </button>
-          </form>
-        </section>
 
         {ings.length > 0 && (
           <section className="mt-8">
@@ -266,17 +237,26 @@ export default async function RecipePage({
               {instructions.length > 0 && (
                 <ol className="mt-3 space-y-3">
                   {instructions.map((step, i) => (
-                    // `dir` on the <p> only. The number badge is UI chrome and
-                    // stays on the left for every language; only the step text
-                    // itself flows RTL.
+                    // `dir` goes on the <li>, not just the text, so the number
+                    // badge mirrors with it. An earlier pass pinned the badge
+                    // to the left on the grounds that it's UI chrome — but on
+                    // a Hebrew step that leaves the "1" stranded at the far
+                    // left with the text starting at the far right and a lake
+                    // of white space between them. The number labels the step,
+                    // so it belongs where the step starts reading.
+                    //
+                    // This does not walk back the app-is-LTR rule (task #25):
+                    // the scope is one row, and everything around it — the
+                    // "Steps" heading, the page, the nav — stays LTR.
                     <li
                       key={step.id}
+                      dir={dirFor(step.text)}
                       className="flex gap-3 rounded-2xl bg-card px-4 py-3 shadow-[0px_4px_14px_rgba(0,0,0,0.05)]"
                     >
                       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-ink">
                         {i + 1}
                       </span>
-                      <p dir={dirFor(step.text)} className="min-w-0 flex-1 text-[15px] leading-relaxed">
+                      <p className="min-w-0 flex-1 text-[15px] leading-relaxed">
                         {step.text}
                       </p>
                     </li>
@@ -287,14 +267,17 @@ export default async function RecipePage({
               {tips.length > 0 && (
                 <ul className="mt-4 space-y-2">
                   {tips.map((step) => (
-                    <li key={step.id} className="flex gap-2 rounded-2xl bg-info-bg px-4 py-3">
+                    // Same reasoning as the numbered steps above: the 💡 leads
+                    // the line, so it follows the line's direction.
+                    <li
+                      key={step.id}
+                      dir={dirFor(step.text)}
+                      className="flex gap-2 rounded-2xl bg-info-bg px-4 py-3"
+                    >
                       <span aria-hidden className="shrink-0">
                         💡
                       </span>
-                      <p
-                        dir={dirFor(step.text)}
-                        className="min-w-0 flex-1 text-sm italic leading-relaxed text-muted"
-                      >
+                      <p className="min-w-0 flex-1 text-sm italic leading-relaxed text-muted">
                         {step.text}
                       </p>
                     </li>
