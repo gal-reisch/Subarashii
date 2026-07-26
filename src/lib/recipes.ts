@@ -63,12 +63,25 @@ export async function saveParsedRecipe(
     throw new Error(error?.message ?? "Failed to create recipe");
   }
 
+  await insertRecipeContent(supabase, recipe.id, parsed);
+  return { id: recipe.id };
+}
+
+// Write a parsed recipe's ingredients and steps against an existing recipe id.
+// Split out of `saveParsedRecipe` so the re-import path (which updates a row
+// rather than creating one) gets identical nutrition matching and ordering
+// instead of a second, subtly-different copy of this logic.
+async function insertRecipeContent(
+  supabase: SupabaseClient,
+  recipeId: string,
+  parsed: ParsedRecipe,
+): Promise<void> {
   if (parsed.ingredients.length > 0) {
     const { data: insertedIngredients, error: ingErr } = await supabase
       .from("ingredient")
       .insert(
         parsed.ingredients.map((ing, i) => ({
-          recipe_id: recipe.id,
+          recipe_id: recipeId,
           position: i,
           raw_text: ing.raw_text,
           language: ing.language,
@@ -98,7 +111,7 @@ export async function saveParsedRecipe(
   if (parsed.steps.length > 0) {
     const { error: stepErr } = await supabase.from("step").insert(
       parsed.steps.map((s, i) => ({
-        recipe_id: recipe.id,
+        recipe_id: recipeId,
         position: i,
         text: s.text,
         detected_timer_seconds: s.detected_timer_seconds,
@@ -107,6 +120,77 @@ export async function saveParsedRecipe(
     );
     if (stepErr) throw new Error(stepErr.message);
   }
+}
 
-  return { id: recipe.id };
+/**
+ * Re-run the importer against a recipe's original URL and replace its contents.
+ *
+ * The reason this exists: Instagram serves a login wall instead of the post
+ * often enough that a share can land as a title-only stub through no fault of
+ * the parser, and improving the parser does nothing for the stubs already
+ * sitting in the box. This is the manual second attempt.
+ *
+ * Two things it deliberately will NOT do:
+ *   - Touch the row at all if the re-parse comes back empty. A failed retry
+ *     leaves the recipe exactly as it was rather than overwriting a partial
+ *     recipe with nothing.
+ *   - Blank out a field the user has since filled in by hand. Title, cover
+ *     image, servings, time and cuisine are only taken from the parse when it
+ *     actually found one, so hand-corrections survive a retry.
+ */
+export async function reimportRecipe(
+  supabase: SupabaseClient,
+  recipeId: string,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const { data: recipe } = await supabase
+    .from("recipe")
+    .select("id,title,source_url,cover_image_url,servings,total_time_min,cuisine")
+    .eq("id", recipeId)
+    .maybeSingle();
+
+  if (!recipe) return { ok: false, message: "That recipe isn't here anymore." };
+  if (!recipe.source_url) {
+    return { ok: false, message: "There's no link to read this one from." };
+  }
+
+  // Imported lazily: this module is pulled into pages that only ever read
+  // recipes, and the parser drags in cheerio plus the whole LLM client.
+  const { parseFromUrl } = await import("./parser");
+  const parsed = await parseFromUrl(recipe.source_url);
+
+  if (parsed.ingredients.length === 0 && parsed.steps.length === 0) {
+    return {
+      ok: false,
+      message: "Still can't read that one — the site wasn't sharing it. Worth another go in a minute.",
+    };
+  }
+
+  // Children go first: `ingredient` and `step` have no unique key to upsert
+  // against, and position ordering only makes sense for a complete set.
+  const { error: delErr } = await supabase.from("ingredient").delete().eq("recipe_id", recipeId);
+  if (delErr) return { ok: false, message: "Couldn't refresh that one. Try again?" };
+  const { error: delStepErr } = await supabase.from("step").delete().eq("recipe_id", recipeId);
+  if (delStepErr) return { ok: false, message: "Couldn't refresh that one. Try again?" };
+
+  const { error: updErr } = await supabase
+    .from("recipe")
+    .update({
+      // `??` not `||` on the title: "Saved recipe" is what the parser returns
+      // when it found no title, and that shouldn't clobber a better existing
+      // one — but `cleanTitle` already turned junk into null upstream, so a
+      // non-default title here is genuinely better than what's stored.
+      title: parsed.title === "Saved recipe" ? recipe.title : parsed.title,
+      cover_image_url: parsed.cover_image_url ?? recipe.cover_image_url,
+      servings: parsed.servings ?? recipe.servings,
+      total_time_min: parsed.total_time_min ?? recipe.total_time_min,
+      cuisine: parsed.cuisine ?? recipe.cuisine,
+      primary_language: parsed.primary_language,
+      needs_review: parsed.needs_review,
+      raw_capture: parsed.raw_capture,
+    })
+    .eq("id", recipeId);
+  if (updErr) return { ok: false, message: "Couldn't refresh that one. Try again?" };
+
+  await insertRecipeContent(supabase, recipeId, parsed);
+  return { ok: true };
 }

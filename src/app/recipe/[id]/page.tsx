@@ -5,6 +5,7 @@ import { HeartIcon } from "@/components/HeartIcon";
 import { LinkButton } from "@/components/Button";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
+import { RetryImport } from "@/components/RetryImport";
 import { setServingsAction, toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
@@ -150,6 +151,10 @@ export default async function RecipePage({
           <div className="mt-4 rounded-2xl bg-warn-bg p-3 text-sm text-warn-text">
             We couldn&apos;t fully read this one. The link is saved — you can add
             the details yourself.
+            {/* Instagram in particular fails intermittently, so the same link
+                read a second time very often works. Only offered when there's
+                a URL to re-read. */}
+            {recipe.source_url && <RetryImport recipeId={recipe.id} />}
           </div>
         )}
 

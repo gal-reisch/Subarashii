@@ -8,7 +8,7 @@ import { detectLang, type Lang } from "@/lib/lang";
 import { heuristicFromText, parseInput } from "@/lib/parser";
 import { extractRecipeFromImages } from "@/lib/parser/llm";
 import { classifyStepKind } from "@/lib/parser/stepKind";
-import { getHouseholdId, saveParsedRecipe } from "@/lib/recipes";
+import { getHouseholdId, reimportRecipe, saveParsedRecipe } from "@/lib/recipes";
 import { createServiceClient } from "@/lib/supabase/service";
 import { SESSION_COOKIE } from "@/lib/session";
 import { detectTimerSeconds } from "@/lib/timers";
@@ -201,6 +201,36 @@ export async function setServingsAction(formData: FormData) {
   revalidatePath("/");
 }
 
+// Read a recipe's source URL again and replace its ingredients/steps with
+// whatever comes back.
+//
+// Instagram hands out a login wall instead of the post often enough that a
+// perfectly good reel can land in the box as a bare title with nothing in it —
+// the same URL fetched a minute later returns the full caption. Retrying is
+// the only thing that helps, and before this the only way to retry was to
+// delete the recipe and paste the link again.
+//
+// Same return-value error model as `deleteRecipeAction`, for the same reason:
+// a thrown error in a Server Action doesn't reach app/error.tsx, it just
+// silently reloads the page and looks like nothing happened.
+export type RetryImportState = { message: string | null; ok: boolean };
+
+export async function retryImportAction(
+  _prevState: RetryImportState,
+  formData: FormData,
+): Promise<RetryImportState> {
+  const recipeId = String(formData.get("recipe_id") ?? "");
+  if (!recipeId) return { message: "No recipe to re-import.", ok: false };
+
+  const supabase = createServiceClient();
+  const result = await reimportRecipe(supabase, recipeId);
+  if (!result.ok) return { message: result.message, ok: false };
+
+  revalidatePath(`/recipe/${recipeId}`);
+  revalidatePath("/");
+  return { message: null, ok: true };
+}
+
 // Delete a recipe, from either the home-page card's small × or the detail
 // page's full-width Delete button. Both go through the confirm dialog in
 // components/DeleteRecipe.tsx first — this action itself is unguarded, since
@@ -211,12 +241,29 @@ export async function setServingsAction(formData: FormData) {
 // cook_log all declare `on delete cascade` on their recipe_id foreign key
 // (supabase/migrations/0001_init.sql), so the children go with it and there's
 // nothing to clean up by hand.
-export async function deleteRecipeAction(formData: FormData) {
+export type DeleteRecipeState = { message: string | null };
+
+export async function deleteRecipeAction(
+  _prevState: DeleteRecipeState,
+  formData: FormData,
+): Promise<DeleteRecipeState> {
   const recipeId = String(formData.get("recipe_id") ?? "");
-  if (!recipeId) return;
+  if (!recipeId) return { message: "No recipe to delete." };
 
   const supabase = createServiceClient();
-  await supabase.from("recipe").delete().eq("id", recipeId);
+  const { error } = await supabase.from("recipe").delete().eq("id", recipeId);
+  // The result used to be discarded, so a delete that failed (dropped
+  // connection, bad id, RLS) still fell through to the redirect and the user
+  // landed back on a box that quietly still contained the recipe.
+  //
+  // Returned rather than thrown, per this version's guidance: "avoid using
+  // try/catch blocks and throw errors. Instead, model expected errors as
+  // return values" (node_modules/next/dist/docs/01-app/01-getting-started/
+  // 10-error-handling.md). A throw here doesn't reach app/error.tsx anyway —
+  // it triggers a silent full-page reload back to the box, which is exactly
+  // the "nothing happened" behaviour we're trying to kill. Returning lets the
+  // dialog say what went wrong and offer another go.
+  if (error) return { message: "Couldn't delete that one. Try again?" };
 
   revalidatePath("/");
   revalidatePath("/favorites");

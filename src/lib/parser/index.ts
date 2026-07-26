@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { detectLang, type Lang } from "../lang";
 import { detectTimerSeconds } from "../timers";
 import type { ParsedRecipe, SourceType } from "../types";
+import { extractArticleText } from "./articleText";
 import { extractSocialCaption } from "./caption";
 import { extractRecipeFromHtml, type JsonLdRecipe } from "./jsonld";
 import { extractRecipeFromText, type LlmRecipe } from "./llm";
@@ -86,17 +87,39 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
   };
 }
 
-// Fallback when a page has no structured recipe data. For a social post the
-// recipe is prose in the caption, so this hands the caption to the LLM; if
-// that comes back empty we still keep title + image and flag for review, so
-// the link is never lost.
-async function ogFallback(html: string, url: string): Promise<ParsedRecipe> {
-  const $ = cheerio.load(html);
-  const descriptions = [
-    $('meta[property="og:description"]').attr("content"),
-    $('meta[name="twitter:description"]').attr("content"),
-    $('meta[name="description"]').attr("content"),
-  ];
+// The Open Graph metadata a page exposes, read once so the fetch-retry loop
+// and the fallback parser can both look at it without re-parsing the document.
+interface PageMeta {
+  ogTitle: string | undefined;
+  descriptions: (string | undefined)[];
+  image: string | null;
+}
+
+function readMeta($: cheerio.CheerioAPI): PageMeta {
+  return {
+    ogTitle: $('meta[property="og:title"]').attr("content"),
+    descriptions: [
+      $('meta[property="og:description"]').attr("content"),
+      $('meta[name="twitter:description"]').attr("content"),
+      $('meta[name="description"]').attr("content"),
+    ],
+    image:
+      $('meta[property="og:image"]').attr("content") ||
+      $('meta[name="twitter:image"]').attr("content") ||
+      null,
+  };
+}
+
+// Fallback when a page has no structured recipe data. Two sources of prose,
+// tried in order:
+//   1. A social caption in the OG tags — for a reel, the recipe IS the caption.
+//   2. The page's own body text — for a blog with no JSON-LD and no useful
+//      og:description, the recipe is sitting in the article and nothing else
+//      in this file was ever reading it.
+// Either way the prose goes to the LLM. If both come up empty we still keep
+// title + image and flag for review, so the link is never lost.
+async function ogFallback($: cheerio.CheerioAPI, url: string): Promise<ParsedRecipe> {
+  const meta = readMeta($);
   // Candidates in descending trustworthiness. The description entries matter
   // most for social posts: Instagram's og:title is often literally
   // "Instagram" (or a login-wall title) while its og:description still
@@ -104,23 +127,19 @@ async function ogFallback(html: string, url: string): Promise<ParsedRecipe> {
   // to the caption is what stops a saved reel from being called "Instagram".
   const title =
     pickTitle([
-      $('meta[property="og:title"]').attr("content"),
+      meta.ogTitle,
       $('meta[name="twitter:title"]').attr("content"),
-      ...descriptions,
+      ...meta.descriptions,
       $("h1").first().text(),
       $("title").text(),
     ]) ?? "Saved recipe";
-  const image =
-    $('meta[property="og:image"]').attr("content") ||
-    $('meta[name="twitter:image"]').attr("content") ||
-    null;
 
   const sourceType = detectSourceType(url);
   const base: ParsedRecipe = {
     title,
     source_url: url,
     source_type: sourceType,
-    cover_image_url: image,
+    cover_image_url: meta.image,
     servings: null,
     total_time_min: null,
     cuisine: null,
@@ -131,17 +150,20 @@ async function ogFallback(html: string, url: string): Promise<ParsedRecipe> {
     raw_capture: url,
   };
 
-  const caption = extractSocialCaption($('meta[property="og:title"]').attr("content"), ...descriptions);
-  if (!caption) return base;
+  // `extractArticleText` strips chrome elements out of the document, so all
+  // metadata reads have to happen before it runs. They do — `meta` and `title`
+  // above are both resolved by this point.
+  const prose = extractSocialCaption(meta.ogTitle, ...meta.descriptions) ?? extractArticleText($);
+  if (!prose) return base;
 
-  // Keep the caption regardless of whether extraction works — if the model
-  // is unavailable or gets it wrong, the raw text is still there to read and
-  // to re-run against later.
-  base.raw_capture = caption;
+  // Keep the prose regardless of whether extraction works — if the model is
+  // unavailable or gets it wrong, the raw text is still there to read and to
+  // re-run against later.
+  base.raw_capture = prose;
 
-  const llm = await extractRecipeFromText(caption);
+  const llm = await extractRecipeFromText(prose);
   if (!llm) return base;
-  return applyLlmRecipe(base, llm, caption);
+  return applyLlmRecipe(base, llm, prose);
 }
 
 // Merge an LLM extraction onto a draft, preferring extracted values but never
@@ -227,30 +249,95 @@ export function heuristicFromText(
   };
 }
 
-// Fetch a URL and extract a recipe. Never throws — returns a review stub on
-// any failure so a saved link is never lost.
-export async function parseFromUrl(url: string): Promise<ParsedRecipe> {
+const FETCH_TIMEOUT_MS = 10_000;
+
+// Instagram does not reliably serve the caption even to a crawler UA. The same
+// reel URL, fetched twice minutes apart, produced a full Hebrew caption once
+// and a bare login wall the other time — same code, same headers. It's rate
+// limiting / load shedding on their side, not something the request can be
+// shaped around, so the only fix is to ask again.
+//
+// Three attempts with a short backoff. Kept small deliberately: this runs
+// inside a Server Action the user is waiting on, and past ~3 tries a failure
+// is much more likely to be a genuinely private post than a flaky response.
+const SOCIAL_ATTEMPTS = 3;
+const RETRY_BACKOFF_MS = 600;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchHtml(url: string, userAgent: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
     const res = await fetch(url, {
       signal: controller.signal,
+      // A retry against a CDN that just handed us a login wall is pointless if
+      // the runtime serves it back out of cache.
+      cache: "no-store",
       headers: {
-        "User-Agent": userAgentFor(detectSourceType(url)),
+        "User-Agent": userAgent,
         Accept: "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9,he;q=0.8",
       },
     });
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  } finally {
     clearTimeout(timeout);
+  }
+}
 
-    if (!res.ok) return stub(url);
-    const html = await res.text();
+// Fetch a URL and extract a recipe. Never throws — returns a review stub on
+// any failure so a saved link is never lost.
+export async function parseFromUrl(url: string): Promise<ParsedRecipe> {
+  try {
+    const sourceType = detectSourceType(url);
+    const isSocial = sourceType === "instagram" || sourceType === "tiktok";
+    const attempts = isSocial ? SOCIAL_ATTEMPTS : 1;
+
+    // Holds the best response seen so far. A login wall still carries a usable
+    // og:image and source URL, so it's kept as a floor while we retry — better
+    // to save a thin recipe than to lose the link to a stub.
+    let html: string | null = null;
+
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (attempt > 0) await sleep(RETRY_BACKOFF_MS * attempt);
+
+      const candidate = await fetchHtml(url, userAgentFor(sourceType));
+      if (!candidate) continue;
+      html ??= candidate;
+
+      // Anything with real recipe content ends the loop immediately. For a
+      // non-social page there's only ever one attempt anyway.
+      if (!isSocial || hasUsableContent(candidate)) {
+        html = candidate;
+        break;
+      }
+    }
+
+    if (!html) return stub(url);
 
     const jr = extractRecipeFromHtml(html);
     if (jr && jr.ingredients.length > 0) return fromJsonLd(jr, url);
-    return await ogFallback(html, url);
+    return await ogFallback(cheerio.load(html), url);
   } catch {
     return stub(url);
+  }
+}
+
+// Did this response actually contain the post, or is it the login wall? Judged
+// by whether there's a caption to extract, since that's the one thing the
+// whole social path depends on.
+function hasUsableContent(html: string): boolean {
+  try {
+    const $ = cheerio.load(html);
+    if (extractRecipeFromHtml(html)?.ingredients.length) return true;
+    const meta = readMeta($);
+    return extractSocialCaption(meta.ogTitle, ...meta.descriptions) !== null;
+  } catch {
+    return false;
   }
 }
 

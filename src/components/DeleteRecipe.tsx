@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { deleteRecipeAction } from "@/app/actions";
+import { deleteRecipeAction, type DeleteRecipeState } from "@/app/actions";
 
 // Confirm copy, in the same deadpan register as the home-page headlines
 // (see lib/quotes.ts). Deliberately low-key: this is a personal recipe box,
@@ -44,6 +44,14 @@ export function DeleteRecipe({
   const [line, setLine] = useState<string | null>(null);
   const open = line !== null;
   const cancelRef = useRef<HTMLButtonElement>(null);
+
+  // On success the action redirects and this component goes away, so `state`
+  // only ever holds a value when the delete actually failed — which is the
+  // one case that used to produce a silent reload and no deleted recipe.
+  const [state, formAction] = useActionState<DeleteRecipeState, FormData>(
+    deleteRecipeAction,
+    { message: null },
+  );
 
   // Escape to dismiss, and don't let the page behind the dialog scroll.
   useEffect(() => {
@@ -116,6 +124,15 @@ export function DeleteRecipe({
               everything in it — ingredients, steps, shelves.
             </p>
 
+            {state.message && (
+              <p
+                role="alert"
+                className="mt-4 rounded-2xl bg-warn-bg px-4 py-3 text-sm font-semibold text-warn-text"
+              >
+                {state.message}
+              </p>
+            )}
+
             <div className="mt-6 flex gap-2">
               <button
                 ref={cancelRef}
@@ -125,7 +142,7 @@ export function DeleteRecipe({
               >
                 Keep it
               </button>
-              <form action={deleteRecipeAction} className="flex-1">
+              <form action={formAction} className="flex-1">
                 <input type="hidden" name="recipe_id" value={recipeId} />
                 <ConfirmButton />
               </form>

@@ -46,7 +46,7 @@ Rules:
 - "steps": one entry per discrete instruction, in order. Split a run-on instruction paragraph into separate steps at the natural boundaries. Do not number them; the app numbers them.
 - Do NOT invent anything. Omit "servings", "total_time_min" and "cuisine" entirely unless the source actually states or clearly implies them. Never output a placeholder like 0 or "unknown".
 - Strip social-media chatter: hashtags, "follow for more", tagged accounts, like/comment counts, emoji-only lines. Keep genuine cooking notes as steps.
-- "title": the dish name only, in the source language. No hashtags, no author handle, no "Recipe:" prefix.
+- "title": the name of the dish that is ACTUALLY BEING MADE, in the source language. Work it out from the ingredients and steps — do not just copy the headline. Publishers pad headlines with editorial framing that says nothing about the food ("המדריך:", "מתכון:", "The Guide:", "Recipe:", "How to make", "You have to try this"), plus author handles, hashtags and clickbait. Strip all of it and keep only the dish. Example: a page headlined "המדריך: תבשיל אסאדו בבצלים וסילאן" is a recipe for "תבשיל אסאדו בבצלים וסילאן" — "המדריך" is not part of the dish name. If the headline names no dish at all, name the dish yourself from what is being cooked.
 - "is_recipe": false if the source contains no actual recipe (just a photo caption, a login page, an ad). When false, leave the arrays empty.`;
 
 export interface LlmRecipe {
@@ -68,9 +68,23 @@ interface RawLlmRecipe {
   is_recipe?: unknown;
 }
 
+// Hebrew writes abbreviations with a gershayim — ק״ג (kg), מ״ל (ml), ס״מ (cm) —
+// and in practice everyone types it as an ASCII double quote: `ק"ג`. That
+// character is poison for structured output: the constrained JSON decoder sees
+// a raw `"` mid-string and closes the string there, so `1.5 ק"ג אסאדו` came
+// back as an ingredient literally named `1.5 ק`. Swapping in the real U+05F4
+// gershayim before the text is sent fixes it, and is what the source meant
+// typographically anyway. Only a quote sandwiched between two Hebrew letters
+// is touched, so ordinary quoted speech is left alone.
+const HEBREW_GERSHAYIM = /(\p{Script=Hebrew})"(\p{Script=Hebrew})/gu;
+
+function normalizeForModel(text: string): string {
+  return text.replace(HEBREW_GERSHAYIM, "$1״$2");
+}
+
 /** Extract a recipe from a block of unstructured text (caption, paste, OCR). */
 export async function extractRecipeFromText(text: string): Promise<LlmRecipe | null> {
-  const trimmed = text.trim();
+  const trimmed = normalizeForModel(text.trim());
   // Below this there is nothing a model could find that the heuristics
   // couldn't, and it isn't worth a round trip.
   if (trimmed.length < 40) return null;

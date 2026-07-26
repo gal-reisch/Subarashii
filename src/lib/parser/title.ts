@@ -70,6 +70,62 @@ const SOCIAL_QUOTED = /:\s*["“„«»](.+)/;
 // - Two Ways", and Hebrew titles routinely use " - " mid-phrase).
 const SITE_SUFFIX = /\s*[|·•]\s*[^|·•]{2,45}$/u;
 
+// Leading editorial labels that publishers bolt onto a headline, which are
+// framing rather than part of the dish name. The user's example: the blog
+// headline "המדריך: תבשיל אסאדו בבצלים וסילאן" — "המדריך" ("the guide")
+// says nothing about what's being cooked, and the recipe should just be
+// called "תבשיל אסאדו בבצלים וסילאן".
+//
+// Deliberately a closed list rather than a general "strip anything before a
+// colon" rule, which would wreck real titles that use a colon structurally
+// ("Dinner: The Best Roast Chicken", "שבת: חמין קלאסי"). Only these exact
+// words, only as the entire leading segment, only when something substantial
+// remains after them.
+const LEADING_LABELS = [
+  // Hebrew
+  "המדריך",
+  "מדריך",
+  "המתכון",
+  "מתכון",
+  "הסוד",
+  "טיפ",
+  "הטיפ",
+  "כתבה",
+  "סרטון",
+  "חדש",
+  "בלעדי",
+  "מומלץ",
+  // English
+  "recipe",
+  "the recipe",
+  "guide",
+  "the guide",
+  "how to",
+  "how to make",
+  "tutorial",
+  "video",
+  "watch",
+  "new",
+  "exclusive",
+  "must try",
+  "must-try",
+];
+
+const LEADING_LABEL_RE = new RegExp(
+  `^(?:${LEADING_LABELS.map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s*[:：]\\s*`,
+  "iu",
+);
+
+/** Strip one leading editorial label ("Recipe: X", "המדריך: X"). Applied once
+ *  rather than in a loop — a title with two stacked labels is vanishingly
+ *  rare, and looping risks eating a real title word by word. */
+function stripLeadingLabel(t: string): string {
+  const stripped = t.replace(LEADING_LABEL_RE, "").trim();
+  // Never let the strip leave a stub; if what remains is too short to be a
+  // dish name, the label was probably doing real work.
+  return stripped.length >= 3 ? stripped : t;
+}
+
 // First sentence boundary, used only for captions (which are prose, so the
 // dish name is the opening sentence and the rest is chatter).
 const SENTENCE_END = /^(.+?[.!?])\s+\p{L}/u;
@@ -108,6 +164,11 @@ export function cleanTitle(raw: string | null | undefined): string | null {
   // leave us with almost nothing.
   const stripped = t.replace(SITE_SUFFIX, "").trim();
   if (stripped.length >= 3) t = stripped;
+
+  // Drop a leading editorial label ("המדריך: …", "Recipe: …"). Done after the
+  // site-suffix strip so "Recipe: X | Some Blog" loses both, and before the
+  // final unquote so a label sitting inside quotes still gets caught.
+  t = stripLeadingLabel(t);
 
   t = unquote(t).trim();
 
