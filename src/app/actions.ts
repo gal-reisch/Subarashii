@@ -199,7 +199,11 @@ export async function setServingsAction(formData: FormData) {
   await supabase.from("recipe").update({ servings }).eq("id", recipeId);
 
   revalidatePath(`/recipe/${recipeId}`);
+  // Both card surfaces, not just the box: /favorites is prerendered and
+  // renders the very same card from the very same query (lib/recipeCards),
+  // so revalidating one and not the other is how it goes stale.
   revalidatePath("/");
+  revalidatePath("/favorites");
 }
 
 // Read a recipe's source URL again and replace its ingredients/steps with
@@ -228,7 +232,10 @@ export async function retryImportAction(
   if (!result.ok) return { message: result.message, ok: false };
 
   revalidatePath(`/recipe/${recipeId}`);
+  // A re-import can rewrite the title and cover image, so the cards change
+  // too — and /favorites shows the same cards as /. See setServingsAction.
   revalidatePath("/");
+  revalidatePath("/favorites");
   return { message: null, ok: true };
 }
 

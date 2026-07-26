@@ -144,6 +144,24 @@ body {
   overscroll-behavior-y: none;
 }
 
+/* Tailwind v4's preflight sets `cursor: default` on buttons (v3 set
+   `pointer`), and that turns out to matter far more on a phone than on a
+   desktop. iOS Safari only applies `:active` to an element it already treats
+   as clickable, and `cursor: pointer` is what marks it as such. Without this
+   rule every `active:scale-*` press state in the app — the delete ×, sign-out,
+   the servings "Update", the Add-screen toggle — silently never fires on
+   touch. The tap registers and the work happens, but nothing acknowledges the
+   press, so the app reads as slow rather than as quiet. Links are unaffected
+   (anchors keep `cursor: pointer`), which is why the recipe cards always felt
+   more responsive than the buttons.
+
+   `:disabled` is excluded so a submitting button doesn't keep inviting taps
+   it's going to ignore. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]) {
+  cursor: pointer;
+}
+
 /* Headings use Poppins SemiBold per the Figma style guide (task #24) — body
    copy stays on Nunito (--font-sans) via the `body` rule above. */
 h1,

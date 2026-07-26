@@ -86,8 +86,7 @@ export function BottomNav() {
         <Link
           href="/add"
           aria-label="Add Recipe"
-          // See the prefetch comment in NavIcon above — same race, same fix.
-          prefetch={false}
+          // Prefetched like the other nav links; see the comment in NavIcon.
           className="absolute left-1/2 top-0 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-accent text-[#fbf5e7] shadow-[0px_10px_24px_rgba(244,166,210,0.5)] transition active:scale-95"
         >
           <PlusIcon />
@@ -112,17 +111,28 @@ function NavIcon({
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      // Prefetch disabled: Next.js prefetches every viewport <Link> the
-      // instant the nav mounts, which fires 3-4 simultaneous requests
-      // through the auth middleware on load. On Vercel's Edge runtime each
-      // request gets its own isolated Supabase client with no shared
-      // refresh-lock, so those simultaneous requests can race to redeem the
-      // same (one-time-use) refresh token — the losers get treated as
-      // logged-out, redirected to /login, and Next.js caches that bad
-      // redirect per-route, making every tap on that icon replay the stale
-      // login bounce until the cache expires. A 4-route personal nav bar
-      // doesn't need prefetching enough to justify that race.
-      prefetch={false}
+      // Prefetch is deliberately left ON (the default), which reverses an
+      // earlier decision here. It was disabled because Next.js prefetches
+      // every in-viewport <Link> as soon as the nav mounts, and back when
+      // this app used Supabase magic-link auth those 3-4 simultaneous
+      // requests raced to redeem the same one-time-use refresh token; the
+      // losers were treated as logged-out and Next cached the resulting
+      // /login redirect per-route, so a tapped icon kept replaying a stale
+      // bounce.
+      //
+      // That failure mode no longer exists. Task #24 replaced per-user auth
+      // with a shared PIN, and the session cookie is now a deterministic
+      // HMAC of a fixed message (src/lib/session.ts) — the proxy only
+      // *verifies* a signature, redeeming nothing and mutating no state, so
+      // concurrent requests are idempotent and can't race.
+      //
+      // Turning it back on is the main fix for taps feeling laggy. Every
+      // page here is dynamic, so without a prefetch a tap can't render
+      // anything until the server answers. With one, the layout and the
+      // loading skeleton up to the first boundary are already in the client
+      // cache, so the tap paints immediately and the content streams in
+      // behind it. (Prefetching only runs in production builds, so this is
+      // invisible in dev.)
       // Every glyph is pink per the Figma nav; the active tab just reads a
       // touch heavier (full-opacity fill + soft pink glow) vs. the ~65%
       // opacity of inactive tabs.
