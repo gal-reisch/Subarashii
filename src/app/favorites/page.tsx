@@ -1,64 +1,20 @@
 import { BottomNav } from "@/components/BottomNav";
 import { LinkButton } from "@/components/Button";
-import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
-import { normalizeImageUrl } from "@/lib/imageUrl";
-import { computeNutritionTotals, getNutritionFlags } from "@/lib/nutritionCalc";
+import { RecipeBrowser } from "@/components/RecipeBrowser";
+import { fetchRecipeCards } from "@/lib/recipeCards";
 import { createServiceClient } from "@/lib/supabase/service";
 
 // Favorites view (task #24) — backs the Figma nav's dedicated "Favorites"
-// tab. Same card grid as the home page, filtered to recipes with the
-// household-shared `is_favorite` flag set (see migration 0005_favorite.sql).
-
-interface RecipeRow {
-  id: string;
-  title: string;
-  cover_image_url: string | null;
-  source_type: string;
-  needs_review: boolean;
-  total_time_min: number | null;
-  cuisine: string | null;
-  servings: number | null;
-  ingredient: {
-    calories: number | null;
-    protein_g: number | null;
-    carbs_g: number | null;
-    fat_g: number | null;
-    fiber_g: number | null;
-    sugar_g: number | null;
-    is_estimated: boolean;
-  }[] | null;
-}
+// tab. Same cards as the home page (shared query in lib/recipeCards.ts),
+// filtered to recipes with the household-shared `is_favorite` flag set (see
+// migration 0005_favorite.sql).
 
 export default async function FavoritesPage() {
-  const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("recipe")
-    .select(
-      "id,title,cover_image_url,source_type,needs_review,total_time_min,cuisine,servings,ingredient(calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,is_estimated)",
-    )
-    .eq("is_favorite", true)
-    .order("created_at", { ascending: false });
-
-  // Graceful degradation: if migration 0005 hasn't been applied yet, the
-  // `is_favorite` column doesn't exist and the query errors — show a setup
-  // notice instead of crashing the page.
-  const migrationMissing = !!error;
-
-  const rows = (data ?? []) as unknown as RecipeRow[];
-  const recipes: CardRecipe[] = rows.map((r) => {
-    const totals = computeNutritionTotals(r.ingredient ?? [], r.servings);
-    return {
-      id: r.id,
-      title: r.title,
-      cover_image_url: normalizeImageUrl(r.cover_image_url),
-      source_type: r.source_type,
-      needs_review: r.needs_review,
-      total_time_min: r.total_time_min,
-      cuisine: r.cuisine,
-      calories: totals?.calories ?? null,
-      caloriesPerServing: totals?.perServing ?? false,
-      nutritionFlags: getNutritionFlags(totals),
-    };
+  // `failed` here means the filter column itself is missing — unlike the home
+  // page, this view is nothing without `is_favorite`, so it says so rather
+  // than rendering an empty box that looks like "you have no favorites".
+  const { recipes, failed: migrationMissing } = await fetchRecipeCards(createServiceClient(), {
+    favoritesOnly: true,
   });
 
   return (

@@ -39,6 +39,10 @@ export interface CategoryStyle {
   pillText: string;
   /** Filter-chip accent when that category's chip is active (family's "mid" tone). */
   chipActive: string;
+  /** The card body's background as a *text* color, so the SVG tab drawn over
+   *  the photo can fill with `currentColor` and match the body exactly.
+   *  Same tone as cardBg — a `text-` utility rather than a `bg-` one. */
+  waveFill: string;
 }
 
 export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
@@ -49,6 +53,7 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-rust-mid",
     pillText: "text-recipe-cat-rust-pale",
     chipActive: "text-recipe-cat-rust-dark",
+    waveFill: "text-recipe-cat-rust-light",
   },
   fish: {
     cardBg: "bg-recipe-cat-blue-light",
@@ -57,6 +62,7 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-blue-mid",
     pillText: "text-recipe-cat-blue-pale",
     chipActive: "text-recipe-cat-blue-dark",
+    waveFill: "text-recipe-cat-blue-light",
   },
   veggie: {
     cardBg: "bg-recipe-cat-olive-light",
@@ -65,6 +71,7 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-olive-mid",
     pillText: "text-recipe-cat-olive-pale",
     chipActive: "text-recipe-cat-olive-dark",
+    waveFill: "text-recipe-cat-olive-light",
   },
   pastry: {
     cardBg: "bg-recipe-cat-amber-light",
@@ -73,6 +80,7 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-amber-mid",
     pillText: "text-recipe-cat-amber-pale",
     chipActive: "text-recipe-cat-amber-dark",
+    waveFill: "text-recipe-cat-amber-light",
   },
   dessert: {
     cardBg: "bg-recipe-cat-purple-light",
@@ -81,6 +89,7 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-purple-mid",
     pillText: "text-recipe-cat-purple-pale",
     chipActive: "text-recipe-cat-purple-dark",
+    waveFill: "text-recipe-cat-purple-light",
   },
   general: {
     cardBg: "bg-recipe-cat-teal-light",
@@ -89,5 +98,6 @@ export const CATEGORY_STYLES: Record<RecipeCategory, CategoryStyle> = {
     pillBg: "bg-recipe-cat-teal-mid",
     pillText: "text-recipe-cat-teal-pale",
     chipActive: "text-recipe-cat-teal-dark",
+    waveFill: "text-recipe-cat-teal-light",
   },
 };

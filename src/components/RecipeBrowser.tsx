@@ -11,28 +11,11 @@ import {
   CATEGORY_ORDER,
   type RecipeCategory,
 } from "@/lib/category";
+import type { CardRecipe } from "@/lib/recipeCards";
 
-export interface CardRecipe {
-  id: string;
-  title: string;
-  cover_image_url: string | null;
-  source_type: string;
-  needs_review: boolean;
-  total_time_min: number | null;
-  cuisine: string | null;
-  /** Calories from the recipe's ingredient totals (see `@/lib/nutritionCalc`).
-   *  Null when no nutrition data exists yet — the footer pill falls back to
-   *  `total_time_min` in that case. */
-  calories: number | null;
-  /** Whether `calories` is a per-serving figure or a whole-recipe total.
-   *  False when the recipe never recorded a serving count. The pill labels
-   *  the two differently rather than passing a tray off as a portion. */
-  caloriesPerServing: boolean;
-  /** "High Protein"/"High Sugar"/etc, same classification as the recipe
-   *  detail page's NutritionChips. The card only has room for one badge, so
-   *  RecipeCard shows the first flag (falls back to nothing if none). */
-  nutritionFlags: string[];
-}
+// Re-exported so the pages that render this component can keep importing the
+// card's shape from the component itself.
+export type { CardRecipe };
 
 // Client-side search + quick filters over the already-fetched recipe list.
 // Kept simple on purpose: the box is meant to stay small (a personal
@@ -207,13 +190,53 @@ function FilterChip({
 const CARD_W = 240;
 const u = (figmaUnits: number) => Math.round((figmaUnits / 737) * CARD_W);
 
-const BODY_H = u(471.5);
 const INSET = u(48 + 20); // body inset is measured from the body edge, which
 // itself sits 20 units in from the card group's bounding box.
 const TAB_H = u(92); // height of the raised "Category" tab = the label's box.
+
+// The photo overlay furniture — the nutrition/needs-review badge on the left,
+// the delete × on the right. Tighter into the corners than the body's text
+// inset, and lower down from the top edge; see the badge's own comment.
+const BADGE_INSET = u(24);
+const BADGE_TOP = u(52);
+
+// The card is taller than the traced 718 units. On a phone the strip was
+// leaving a band of dead background between the cards and the bottom nav —
+// the row is the only content on the page, so whatever it doesn't occupy
+// reads as a mistake rather than as breathing room.
+//
+// The ~96 extra units are split deliberately unevenly. Almost all of it goes
+// to the photo, because the body only holds three short things (label, title,
+// pill) and the pill is pinned to the bottom — every pixel added there lands
+// in the gap between title and pill as visible emptiness, which is the same
+// "dead band" problem moved inside the card. The photo has no such problem:
+// it just shows more food. The body still gets enough to clear a three-line
+// title plus an author line without any card in the row outgrowing its
+// siblings.
+const BODY_H = u(471.5) + 24;
 // The photo isn't simply "card height minus body height": the body's tab
-// overlaps the photo, so photo + body − tab must equal the 718-unit card.
-const PHOTO_H = u(718) - BODY_H + TAB_H;
+// overlaps the photo, so photo + body − tab must equal the whole card.
+const PHOTO_H = u(718) - u(471.5) + TAB_H + 72;
+
+// The tab's top edge, as an SVG path across a 100 × TAB_H viewBox.
+//
+// This edge used to be a `clip-path: polygon(...)`, which meant the riser
+// between the raised tab and the rest of the edge was a straight diagonal —
+// and that was the specific thing flagged as not matching the design: the
+// real edge curves, it doesn't cut. A polygon has no way to express that;
+// `path()` in clip-path does, but isn't safe to feed percentage widths.
+//
+// So the edge is drawn as an actual filled <svg> in the body's own color,
+// sitting above the photo, with the rectangular remainder of the body
+// underneath it. `preserveAspectRatio="none"` lets the 100-unit-wide viewBox
+// stretch to whatever the card is, so the curve's shape is authored once in
+// convenient units and scales with the card.
+//
+// Reading the path: full-height left section out to 40%, a cubic that eases
+// down to the baseline by 58% (control points pulled well past their
+// anchors — that's what makes it an S-curve rather than a slump), then the
+// baseline out to the right edge and back around the bottom.
+const TAB_PATH = "M0 0 H40 C48 0 50 100 58 100 H100 V100 H0 Z";
 
 function RecipeCard({
   recipe,
@@ -224,26 +247,36 @@ function RecipeCard({
 }) {
   const styles = CATEGORY_STYLES[category];
 
-  // The badge slot only fits one label. `needs_review` is a real,
-  // functionally important state (parsing failed, details need manual
-  // entry) so it takes priority over the cosmetic nutrition flags when both
-  // are true — and it gets the high-contrast badge treatment, because a
-  // warning the user can't read is worse than no warning at all.
+  // The badge slot fits one label. `needs_review` is a real, functionally
+  // important state (parsing failed, details need manual entry) so it takes
+  // priority over the nutrition flags when both are true — and it gets the
+  // high-contrast treatment, because a warning the user can't read is worse
+  // than no warning at all. Otherwise the slot carries the nutrition flag,
+  // which is the common case and the one that earns the space: "High
+  // Protein" is a reason to pick a recipe, "Needs review" is an exception.
   const badgeText = recipe.needs_review ? "Needs review" : (recipe.nutritionFlags[0] ?? null);
   const badgeVariant = recipe.needs_review ? "solid" : "glass";
 
-  // Footer stat. Calories are the designed content — the pill in Figma reads
-  // "10,250 cKal per 100gr" / "450 cKal Per Serving", i.e. a nutrition value
-  // with a qualifier, not a cook time. Time is only the fallback for recipes
-  // whose ingredients never resolved to any nutrition data at all.
+  // Footer stat, in preference order.
+  //
+  // Per 100g leads because a serving isn't a unit. "450 kcal per serving"
+  // can't be compared to anything — you'd have to know whether this recipe's
+  // author thought a serving was a side or a dinner, and they almost never
+  // say. 100g is the same 100g in every recipe in the box, so the numbers
+  // line up against each other. Per-serving and whole-recipe totals stay as
+  // fallbacks for recipes whose ingredient weights are too patchy for a
+  // density (see caloriesPer100g), and time is the last resort for recipes
+  // with no nutrition data at all.
   const stat =
-    recipe.calories != null
-      ? `${Math.round(recipe.calories).toLocaleString("en-US")} kcal ${
-          recipe.caloriesPerServing ? "per serving" : "total"
-        }`
-      : recipe.total_time_min != null
-        ? `${recipe.total_time_min} min`
-        : null;
+    recipe.caloriesPer100g != null
+      ? `${Math.round(recipe.caloriesPer100g).toLocaleString("en-US")} kcal per 100g`
+      : recipe.calories != null
+        ? `${Math.round(recipe.calories).toLocaleString("en-US")} kcal ${
+            recipe.caloriesPerServing ? "per serving" : "total"
+          }`
+        : recipe.total_time_min != null
+          ? `${recipe.total_time_min} min`
+          : null;
 
   return (
     // The delete × is a sibling of the <Link>, not a child of it: a <button>
@@ -253,7 +286,13 @@ function RecipeCard({
     <div style={{ width: CARD_W }} className="relative shrink-0">
       <Link
         href={`/recipe/${recipe.id}`}
-        className="group block overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
+        // The shadow used to be `0 16px 40px rgba(0,0,0,0.08)` — a wide, soft
+        // pool that spread further than the gap between cards, so on the
+        // horizontal strip each card sat in a visible grey smudge and the
+        // neighbouring card's smudge overlapped it. Tightened to a short
+        // contact shadow: enough to lift the card off the cream, small enough
+        // to stay under the card.
+        className="group block overflow-hidden rounded-[28px] shadow-[0px_4px_12px_rgba(0,0,0,0.06)] transition duration-100 active:scale-[0.98]"
       >
         <div style={{ height: PHOTO_H }} className="relative w-full overflow-hidden bg-card">
           {recipe.cover_image_url ? (
@@ -282,13 +321,15 @@ function RecipeCard({
             //    pill silhouette but inverts to a dark scrim, so it holds
             //    contrast over light AND dark photos.
             //
-            // Left inset matches the body's content inset (both 48 units in
-            // Figma) so the badge, the category label, the title and the stat
-            // pill all share one left margin. Text floored at 10px — a literal
-            // scale of Figma's 28-unit type would land under 10 and stop being
-            // readable on a phone.
+            // Both this badge and the delete × opposite it sit at BADGE_INSET,
+            // not at the body's text inset. They're overlaid on a photo rather
+            // than set in a text column, and matching the text margin left them
+            // looking timidly inset from the corners they belong to — the two
+            // are corner furniture, so they hug the corners. Text floored at
+            // 10px — a literal scale of Figma's 28-unit type would land under
+            // 10 and stop being readable on a phone.
             <span
-              style={{ left: INSET, top: u(40) }}
+              style={{ left: BADGE_INSET, top: BADGE_TOP }}
               className={`absolute max-w-[calc(100%-2rem)] truncate rounded-full px-2 py-[3px] font-heading text-[10px] font-medium backdrop-blur-md ${
                 badgeVariant === "solid"
                   ? "border border-white/50 bg-black/55 text-white"
@@ -300,30 +341,39 @@ function RecipeCard({
           )}
         </div>
 
-        {/* Card body, pulled up over the photo and clipped so its top edge is a
-            raised tab on the left holding the category label, then a short
-            diagonal riser down to the rest of the edge. In Figma the flat top
-            runs to ~43% of the body width and the riser lands at ~56%.
+        {/* Card body, pulled up over the photo so its top edge is a raised tab
+            on the left holding the category label, then a curve down to the
+            rest of the edge.
 
-            The depth is a px value derived from CARD_W rather than a clip-path
-            percentage, because clip-path resolves vertical percentages against
-            element *height* — and the body's height varies with how many lines
-            the title wraps to, which would make the tab grow and shrink per
-            card. A straight-line clip needs no per-category SVG asset either;
-            it just reuses the body's own background color. */}
-        <div
-          style={{
-            marginTop: -TAB_H,
-            minHeight: BODY_H,
-            paddingLeft: INSET,
-            paddingRight: INSET,
-            clipPath: `polygon(0 0, 43% 0, 56% ${TAB_H}px, 100% ${TAB_H}px, 100% 100%, 0 100%)`,
-          }}
-          className={`relative flex flex-col pb-4 ${styles.cardBg}`}
-        >
-          <p
+            The curve is drawn rather than clipped. `clip-path: polygon()` can
+            only make that riser a straight diagonal, which is what made the
+            previous version read as a sharp notch instead of the design's
+            gentle S. Layering an SVG of the tab over the photo, in the body's
+            own fill color, gets the real curve with no per-category asset —
+            the fill is `currentColor` and the color comes from the same
+            category class the body uses. */}
+        <div style={{ marginTop: -TAB_H }} className={`relative ${styles.waveFill}`}>
+          <svg
             style={{ height: TAB_H }}
-            className={`flex items-center font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            aria-hidden
+            className="block w-full"
+          >
+            <path d={TAB_PATH} fill="currentColor" />
+          </svg>
+        </div>
+
+        <div
+          style={{ minHeight: BODY_H, paddingLeft: INSET, paddingRight: INSET }}
+          className={`relative flex flex-col pb-5 ${styles.cardBg}`}
+        >
+          {/* The label used to be vertically centred in the tab, which put it
+              hard against the card's top edge. Nudged down onto its own line
+              under the tab so the text block starts where the eye expects a
+              text block to start. */}
+          <p
+            className={`pt-1 font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
           >
             {CATEGORY_LABELS[category]}
           </p>
@@ -333,10 +383,24 @@ function RecipeCard({
               regardless of recipe language. */}
           <p
             dir={dirFor(recipe.title)}
-            className={`mt-1 line-clamp-2 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
+            className={`mt-1.5 line-clamp-3 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
           >
             {recipe.title}
           </p>
+          {recipe.author && (
+            // Attribution, in the design's hierarchy: category, then dish,
+            // then who made it. Set quiet — same color as the title but
+            // dimmed and much smaller, so it reads as a caption on the title
+            // rather than a second title. Most recipes have no author, and
+            // the row simply isn't rendered for those rather than reserving
+            // an empty line.
+            <p
+              dir={dirFor(recipe.author)}
+              className={`mt-1 truncate text-[11px] font-medium opacity-70 ${styles.titleText}`}
+            >
+              {recipe.author}
+            </p>
+          )}
           {stat && (
             // Figma's pill is 420 wide on a 697-wide body (≈60%) with centred
             // Geist Mono Medium text, so this is a min-width + centred pill
@@ -358,7 +422,7 @@ function RecipeCard({
           Deliberately quiet — a small translucent glyph, not a red button.
           Deleting a recipe is rare and the confirm dialog is the real
           safeguard, so this only needs to be findable, not prominent. */}
-      <div style={{ right: INSET, top: u(40) }} className="absolute z-10">
+      <div style={{ right: BADGE_INSET, top: BADGE_TOP }} className="absolute z-10">
         <DeleteRecipe recipeId={recipe.id} title={recipe.title} variant="icon" />
       </div>
     </div>
