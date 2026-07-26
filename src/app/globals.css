@@ -18,6 +18,15 @@
   --accent: #f4a6d2;
   --accent-ink: #1a1a1a;
 
+  /* Two derivatives of --accent, both introduced for the nutrition chips.
+     --accent-soft is the light end of the gradient on the "High Sugar"-style
+     flag chips. --accent-deep is the same hue pushed dark enough to be read
+     as text: --accent itself sits at ~1.8:1 against the cream background,
+     which is a decorative fill, not a legible ink. --accent-deep is ~6.2:1,
+     so "pink text" can actually mean pink text. */
+  --accent-soft: #fbdcef;
+  --accent-deep: #a3376e;
+
   /* Secondary "button inactive" state — Figma's gray pill treatment for the
      non-selected segment of a toggle/short-button pair. */
   --button-inactive-bg: #e5e5e5;
@@ -33,24 +42,13 @@
   --info-bg: #e7eee0;
   --info-text: #4f6144;
 
-  /* Nutrition-chip category palette — pastel, saturated-but-soft color per
-     nutrient, drawn from the drink-tracker reference (each category gets its
-     own tinted card rather than one muted badge style for everything).
-     calories/carbs intentionally reuse --warn/--info above; these four are
-     the net-new hues. Every pair below is verified ≥4.5:1 (WCAG AA, normal
-     text) for its bold text color against its own tinted background.
-     NOTE: this is a nutrient-type system (protein/fat/sugar/fiber, fixed
-     meaning across every recipe) — completely separate from the per-recipe
-     "category" color ramp below (--recipe-cat-*), which is decorative and
-     assigned per recipe via its cuisine. Do not conflate the two. */
-  --cat-protein-bg: #cfe7f8;
-  --cat-protein-text: #1b5a7a;
-  --cat-fat-bg: #e4d9f6;
-  --cat-fat-text: #5a4589;
-  --cat-sugar-bg: #f8d3c7;
-  --cat-sugar-text: #9c3a22;
-  --cat-fiber-bg: #cfeee6;
-  --cat-fiber-text: #1c6b5c;
+  /* The per-nutrient pastel tokens that used to live here (protein blue, fat
+     purple, sugar red, fiber green) are gone. They gave each nutrient its own
+     tinted card, which turned the nutrition panel into a swatch board: six
+     hues with no shared meaning, competing with the numbers — the only part
+     anyone actually reads. The chips are pink-on-cream now and the flag pills
+     carry the emphasis instead. Not to be confused with the --recipe-cat-*
+     ramp below, which is a different, still-live system. */
 
   /* Per-recipe category color ramp (task #24) — 6 hues, 4 shades each
      (dark/mid/light/pale), sourced from the user's Figma "Category Color
@@ -92,20 +90,14 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-deep: var(--accent-deep);
   --color-button-inactive-bg: var(--button-inactive-bg);
   --color-button-inactive-text: var(--button-inactive-text);
   --color-warn-bg: var(--warn-bg);
   --color-warn-text: var(--warn-text);
   --color-info-bg: var(--info-bg);
   --color-info-text: var(--info-text);
-  --color-cat-protein-bg: var(--cat-protein-bg);
-  --color-cat-protein-text: var(--cat-protein-text);
-  --color-cat-fat-bg: var(--cat-fat-bg);
-  --color-cat-fat-text: var(--cat-fat-text);
-  --color-cat-sugar-bg: var(--cat-sugar-bg);
-  --color-cat-sugar-text: var(--cat-sugar-text);
-  --color-cat-fiber-bg: var(--cat-fiber-bg);
-  --color-cat-fiber-text: var(--cat-fiber-text);
   --color-recipe-cat-teal-dark: var(--recipe-cat-teal-dark);
   --color-recipe-cat-teal-mid: var(--recipe-cat-teal-mid);
   --color-recipe-cat-teal-light: var(--recipe-cat-teal-light);
@@ -160,4 +152,36 @@ h3 {
   font-family: var(--font-heading), system-ui, sans-serif;
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* The "High Sugar" / "High Protein" flag pills in <NutritionChips>.
+   Everything else in that panel is a flat outlined chip, so this is the one
+   thing on the page that moves — which is the point: the flags are the
+   summary, the six stat chips are the detail behind it, and the eye should
+   land on the summary first. Slow (3.2s) and low-contrast on purpose; a fast
+   or bright pulse next to a recipe you're reading is an irritant.
+
+   Animating box-shadow rather than opacity/transform keeps the pill itself
+   perfectly still — the glow breathes around it, the text never shifts. */
+@keyframes flag-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 6px 0 rgba(244, 166, 210, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 18px 3px rgba(244, 166, 210, 0.85);
+  }
+}
+
+.flag-glow {
+  animation: flag-glow 3.2s ease-in-out infinite;
+}
+
+/* Reduced motion keeps the halo, just stops it breathing — the emphasis is
+   the point of the chip, the movement was only ever how it was delivered. */
+@media (prefers-reduced-motion: reduce) {
+  .flag-glow {
+    animation: none;
+    box-shadow: 0 0 14px 2px rgba(244, 166, 210, 0.6);
+  }
 }

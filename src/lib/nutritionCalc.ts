@@ -81,53 +81,25 @@ export function computeNutritionTotals(
 // Rough per-serving thresholds for the qualitative flags. Deliberately
 // simple (no RDA %, no age/sex adjustment) — good enough for "does this
 // recipe skew toward X" at a glance, not a clinical claim.
+//
+// These entries used to carry a `bg`/`text` Tailwind class pair each, giving
+// every nutrient its own pastel hue. Six competing colors turned out to be
+// harder to read than no color at all — you scanned the palette instead of
+// the numbers — so the chips are now uniformly pink and the per-nutrient
+// classes are gone. See NutritionChips.tsx.
 export const NUTRIENT_DEFS: {
   key: (typeof NUTRITION_KEYS)[number];
   label: string;
   unit: string;
-  bg: string;
-  text: string;
   flagLabel?: string;
   threshold?: number;
 }[] = [
-  { key: "calories", label: "Calories", unit: "kcal", bg: "bg-warn-bg", text: "text-warn-text" },
-  {
-    key: "protein_g",
-    label: "Protein",
-    unit: "g",
-    bg: "bg-cat-protein-bg",
-    text: "text-cat-protein-text",
-    flagLabel: "High Protein",
-    threshold: 20,
-  },
-  { key: "carbs_g", label: "Carbs", unit: "g", bg: "bg-info-bg", text: "text-info-text" },
-  {
-    key: "fat_g",
-    label: "Fat",
-    unit: "g",
-    bg: "bg-cat-fat-bg",
-    text: "text-cat-fat-text",
-    flagLabel: "High Fat",
-    threshold: 20,
-  },
-  {
-    key: "fiber_g",
-    label: "Fiber",
-    unit: "g",
-    bg: "bg-cat-fiber-bg",
-    text: "text-cat-fiber-text",
-    flagLabel: "High Fiber",
-    threshold: 5,
-  },
-  {
-    key: "sugar_g",
-    label: "Sugar",
-    unit: "g",
-    bg: "bg-cat-sugar-bg",
-    text: "text-cat-sugar-text",
-    flagLabel: "High Sugar",
-    threshold: 15,
-  },
+  { key: "calories", label: "Calories", unit: "kcal" },
+  { key: "protein_g", label: "Protein", unit: "g", flagLabel: "High Protein", threshold: 20 },
+  { key: "carbs_g", label: "Carbs", unit: "g" },
+  { key: "fat_g", label: "Fat", unit: "g", flagLabel: "High Fat", threshold: 20 },
+  { key: "fiber_g", label: "Fiber", unit: "g", flagLabel: "High Fiber", threshold: 5 },
+  { key: "sugar_g", label: "Sugar", unit: "g", flagLabel: "High Sugar", threshold: 15 },
 ];
 
 // Which qualitative flags a set of totals trips, in the same fixed order as

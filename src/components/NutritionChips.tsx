@@ -1,13 +1,21 @@
-// Nutrition chips (task #20). Two layers, both styled from the same source:
-// bold, saturated-pastel color-blocked cards per nutrient (drink-tracker
-// reference) with big bold numbers in a small stat-card layout (trakmac
-// reference — that image was for *typography/layout only*, not its dark
-// color scheme).
+// Nutrition chips (task #20, restyled in #41). Two layers:
 //
 //   1. Qualitative pills ("High Protein", "High Sugar"...) — the literal
 //      "classify the recipe" ask. Derived from simple per-serving thresholds
-//      below; only shown when a threshold is actually crossed.
+//      in nutritionCalc; only shown when a threshold is actually crossed.
 //   2. The full per-serving stat grid, always shown when any value exists.
+//
+// The two used to look the same: a pastel card per nutrient, each in its own
+// hue, flags and stats alike. That made the panel a swatch board — six colors
+// with no shared meaning, and reading it meant parsing the palette before the
+// numbers. It also flattened the hierarchy, because the summary line and the
+// detail behind it were styled identically.
+//
+// So the layers are now told apart by weight rather than by hue. The stat
+// grid is quiet: pink outline, pink text, no fill. The flags are loud: a pink
+// gradient fill, no outline, and a slow glow (see `.flag-glow` in globals.css)
+// — one moving thing on the page, and it's the one-line summary. Everything
+// is the same pink, so "which color is fat again?" stops being a question.
 //
 // Every number here traces back to real per-ingredient values summed from
 // the `ingredient` table (see RecipePage) — nothing is fabricated in this
@@ -63,11 +71,13 @@ export function NutritionChips({
       {servingsControl}
 
       {flags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        // `pb-1` on the row so the glow has somewhere to land instead of
+        // being clipped against the stat grid directly underneath.
+        <div className="mt-3 flex flex-wrap gap-3 pb-1">
           {flags.map((n) => (
             <span
               key={n.key}
-              className={`rounded-full px-3 py-1.5 text-sm font-bold ${n.bg} ${n.text}`}
+              className="flag-glow rounded-full bg-gradient-to-br from-accent to-accent-soft px-3.5 py-1.5 font-heading text-sm font-semibold text-accent-ink"
             >
               {n.flagLabel}
             </span>
@@ -77,11 +87,14 @@ export function NutritionChips({
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         {present.map((n) => (
-          <div key={n.key} className={`rounded-2xl px-3 py-3 ${n.bg}`}>
-            <div className={`text-[11px] font-bold uppercase tracking-wide ${n.text} opacity-80`}>
+          <div
+            key={n.key}
+            className="rounded-2xl border border-accent px-3 py-3 text-accent-deep"
+          >
+            <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
               {n.label}
             </div>
-            <div className={`mt-1 font-mono text-2xl font-extrabold leading-none ${n.text}`}>
+            <div className="mt-1 font-mono text-2xl font-extrabold leading-none">
               {Math.round(totals[n.key] as number)}
               <span className="ml-0.5 text-sm font-bold">{n.unit}</span>
             </div>
