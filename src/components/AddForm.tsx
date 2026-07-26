@@ -4,6 +4,15 @@ import { useState } from "react";
 import { useFormStatus } from "react-dom";
 import { addFromUrlAction, addManualAction } from "@/app/actions";
 import { buttonClass } from "@/components/Button";
+import { ScreenshotPicker } from "@/components/ScreenshotPicker";
+
+type Tab = "link" | "photo" | "manual";
+
+const TABS: { id: Tab; label: string }[] = [
+  { id: "link", label: "via Link" },
+  { id: "photo", label: "Screenshots" },
+  { id: "manual", label: "Manual" },
+];
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -16,35 +25,43 @@ function SubmitButton({ label }: { label: string }) {
 
 const labelClass = "font-heading text-[17px] font-semibold text-foreground";
 
+const ERRORS: Record<string, string> = {
+  empty: "That link was blank — paste a recipe URL and try again.",
+  "no-images": "Add at least one screenshot first.",
+  unreadable:
+    "Couldn't find a recipe in those screenshots. Try shots that show the ingredients and steps as text, or add it by hand.",
+};
+
 // White bg + pink 1px border + soft shadow, per the Figma "Add a Recipe"
 // frame — the pink border is a base-state style there, not focus-only, so
 // focus just tightens it into a 2px ring rather than introducing the color.
 const inputClass =
   "rounded-[10px] border border-accent bg-white px-4 py-3.5 outline-none shadow-[0px_10px_40px_0px_rgba(0,0,0,0.03)] focus:shadow-[0px_0px_0px_2px_var(--accent)]";
 
-export function AddForm() {
-  const [tab, setTab] = useState<"link" | "manual">("link");
+export function AddForm({ initialTab = "link", error }: { initialTab?: Tab; error?: string }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <div>
-      <div className="mb-6 flex gap-2 rounded-full bg-card p-1 text-sm font-semibold shadow-[0px_6px_20px_rgba(0,0,0,0.05)]">
-        <button
-          onClick={() => setTab("link")}
-          className={`flex-1 rounded-full px-4 py-2 font-heading font-medium transition ${
-            tab === "link" ? "bg-accent text-accent-ink" : "text-button-inactive-text"
-          }`}
-        >
-          via Link
-        </button>
-        <button
-          onClick={() => setTab("manual")}
-          className={`flex-1 rounded-full px-4 py-2 font-heading font-medium transition ${
-            tab === "manual" ? "bg-accent text-accent-ink" : "text-button-inactive-text"
-          }`}
-        >
-          Manual
-        </button>
+      <div className="mb-6 flex gap-1 rounded-full bg-card p-1 text-sm font-semibold shadow-[0px_6px_20px_rgba(0,0,0,0.05)]">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`flex-1 rounded-full px-3 py-2 font-heading font-medium transition ${
+              tab === t.id ? "bg-accent text-accent-ink" : "text-button-inactive-text"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-2xl bg-warn-bg p-3 text-sm text-warn-text">
+          {ERRORS[error] ?? "Something went wrong. Give it another go."}
+        </div>
+      )}
 
       {tab === "link" ? (
         <form action={addFromUrlAction} className="flex flex-col gap-3">
@@ -58,11 +75,13 @@ export function AddForm() {
             className={inputClass}
           />
           <p className="text-xs text-muted">
-            Works best with recipe blogs. Instagram/TikTok links are saved for
-            you to finish by hand.
+            Recipe blogs, Instagram and TikTok all work — for a social post the
+            recipe is read straight out of the caption.
           </p>
           <SubmitButton label="Save recipe" />
         </form>
+      ) : tab === "photo" ? (
+        <ScreenshotPicker />
       ) : (
         <form action={addManualAction} className="flex flex-col gap-3">
           <label className={labelClass}>Title</label>

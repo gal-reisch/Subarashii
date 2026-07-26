@@ -7,7 +7,7 @@ import { NutritionChips } from "@/components/NutritionChips";
 import { toggleFavoriteAction } from "@/app/actions";
 import { createCollectionAction, toggleRecipeInCollectionAction } from "@/app/collections/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
-import { dirFor, isRtl } from "@/lib/lang";
+import { dirFor } from "@/lib/lang";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
 import { mergeUnclosedParens } from "@/lib/parser/mergeSteps";
 import { classifyStepKind } from "@/lib/parser/stepKind";
@@ -69,26 +69,20 @@ export default async function RecipePage({
   const memberIds = new Set((memberships ?? []).map((m) => m.collection_id));
   const nutritionTotals = computeNutritionTotals(ings, recipe.servings);
 
-  // Direction for the whole recipe view, not just its individual text lines.
-  // Per-line `dir` (below) already got Hebrew text rendering right-to-left,
-  // but the *layout* stayed left-to-right: section headings ("Ingredients",
-  // "Steps") sat on the left of an otherwise right-aligned Hebrew recipe,
-  // which reads as broken to a Hebrew speaker. Setting dir on the container
-  // mirrors headings, list indentation and flex order together.
+  // NOTE: deliberately no container-level `dir` here. An earlier pass set
+  // dir on <main> for Hebrew recipes, which mirrored the entire layout —
+  // headings, back button, flex order. The app's UI is English and stays
+  // LTR no matter what language a recipe is in; only the recipe's own text
+  // flows RTL, via the per-line `dirFor` calls below. Layout LTR, text
+  // per-line — that rule holds across the whole app.
   //
-  // Driven by the recipe's detected `primary_language` (a majority vote over
-  // its ingredients and steps) rather than the title alone, so an English
-  // title on a Hebrew recipe doesn't flip the whole page back. The per-line
-  // `dirFor` calls stay exactly as they are — they're what keeps an
-  // individual English ingredient readable inside an RTL recipe.
-  const rtl = recipe.primary_language === "he" || isRtl(recipe.title);
   // See lib/imageUrl.ts — unwraps a stored Google-Images result link so an
   // already-saved recipe stops rendering a broken-image icon.
   const coverImageUrl = normalizeImageUrl(recipe.cover_image_url);
 
   return (
     <div className="min-h-full">
-      <main dir={rtl ? "rtl" : "ltr"} className="mx-auto max-w-2xl px-5 pb-32 pt-6">
+      <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
         <div className="flex items-center justify-between">
           <BackButton href="/" label="Back to the box" />
           {/* Favorite toggle (task #24) — plain-submit form, no client JS.
@@ -258,20 +252,19 @@ export default async function RecipePage({
               {instructions.length > 0 && (
                 <ol className="mt-3 space-y-3">
                   {instructions.map((step, i) => (
-                    // dir goes on the flex container itself (not just the
-                    // text) so the number badge and the paragraph both flip
-                    // order for Hebrew — CSS flexbox's "row" axis follows the
-                    // element's own direction, so this alone fixes badge
-                    // placement + alignment.
+                    // `dir` on the <p> only. The number badge is UI chrome and
+                    // stays on the left for every language; only the step text
+                    // itself flows RTL.
                     <li
                       key={step.id}
-                      dir={dirFor(step.text)}
                       className="flex gap-3 rounded-2xl bg-card px-4 py-3 shadow-[0px_4px_14px_rgba(0,0,0,0.05)]"
                     >
                       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-ink">
                         {i + 1}
                       </span>
-                      <p className="text-[15px] leading-relaxed">{step.text}</p>
+                      <p dir={dirFor(step.text)} className="min-w-0 flex-1 text-[15px] leading-relaxed">
+                        {step.text}
+                      </p>
                     </li>
                   ))}
                 </ol>
@@ -280,15 +273,14 @@ export default async function RecipePage({
               {tips.length > 0 && (
                 <ul className="mt-4 space-y-2">
                   {tips.map((step) => (
-                    <li
-                      key={step.id}
-                      dir={dirFor(step.text)}
-                      className="flex gap-2 rounded-2xl bg-info-bg px-4 py-3"
-                    >
+                    <li key={step.id} className="flex gap-2 rounded-2xl bg-info-bg px-4 py-3">
                       <span aria-hidden className="shrink-0">
                         💡
                       </span>
-                      <p className="text-sm italic leading-relaxed text-muted">
+                      <p
+                        dir={dirFor(step.text)}
+                        className="min-w-0 flex-1 text-sm italic leading-relaxed text-muted"
+                      >
                         {step.text}
                       </p>
                     </li>

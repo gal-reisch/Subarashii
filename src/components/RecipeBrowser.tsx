@@ -19,10 +19,14 @@ export interface CardRecipe {
   needs_review: boolean;
   total_time_min: number | null;
   cuisine: string | null;
-  /** Per-serving calories, computed server-side from ingredient totals
-   *  (see `@/lib/nutritionCalc`). Null when no nutrition data exists yet —
-   *  the footer pill falls back to `total_time_min` in that case. */
+  /** Calories from the recipe's ingredient totals (see `@/lib/nutritionCalc`).
+   *  Null when no nutrition data exists yet — the footer pill falls back to
+   *  `total_time_min` in that case. */
   calories: number | null;
+  /** Whether `calories` is a per-serving figure or a whole-recipe total.
+   *  False when the recipe never recorded a serving count. The pill labels
+   *  the two differently rather than passing a tray off as a portion. */
+  caloriesPerServing: boolean;
   /** "High Protein"/"High Sugar"/etc, same classification as the recipe
    *  detail page's NutritionChips. The card only has room for one badge, so
    *  RecipeCard shows the first flag (falls back to nothing if none). */
@@ -109,13 +113,26 @@ export function RecipeBrowser({ recipes }: { recipes: CardRecipe[] }) {
       {filtered.length === 0 ? (
         <p className="mt-8 text-center text-muted">No recipes match your search.</p>
       ) : (
-        <div className="mt-3 grid grid-cols-2 gap-5">
+        // One horizontally-scrolling row rather than a two-up vertical grid.
+        // The negative margin + matching padding lets the strip bleed to the
+        // screen edges while the first and last card still line up with the
+        // page's own gutter, so a half-visible card at the right edge is the
+        // scroll affordance. Snap points keep it landing on whole cards.
+        //
+        // The category chips above re-filter this same row (rather than
+        // adding a row per category) — the box is a personal collection, so
+        // one strip stays legible and a per-category carousel stack would be
+        // mostly empty.
+        // `scroll-pl-5` matters more than it looks: a snap point aligns the
+        // card's edge to the *snapport*, which defaults to the container's
+        // border box and so cancels out the `px-5` gutter — the first card
+        // ends up flush against the screen edge. Scroll-padding moves the
+        // snapport in to match the gutter.
+        <div className="-mx-5 mt-3 flex snap-x snap-mandatory scroll-pl-5 gap-5 overflow-x-auto px-5 pb-6 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {filtered.map((r) => (
-            <RecipeCard
-              key={r.id}
-              recipe={r}
-              category={categories.get(r.id) ?? "general"}
-            />
+            <div key={r.id} className="snap-start">
+              <RecipeCard recipe={r} category={categories.get(r.id) ?? "general"} />
+            </div>
           ))}
         </div>
       )}
@@ -156,20 +173,47 @@ function FilterChip({
   );
 }
 
-// Recipe card, redesigned per the user's Figma style guide (task #24).
-// Re-verified directly against the live Figma file (desktop app inspection,
-// not just the earlier paraphrased style summary) after the user flagged
-// mismatches:
-//   - The photo→body transition is a diagonal "flag notch" (flat edge that
-//     angles up to a triangular photo reveal at the top-right), not a wave.
-//   - The photo badge uses Figma's `custom glass` effect style: white fill
-//     at 20% opacity, a full-opacity 1px white inside stroke, fully rounded
-//     corners, backdrop blur. Confirmed via the Design panel's Fill/Effects
-//     fields on the badge background rectangle.
-// Category color is auto-assigned from the recipe's *type* (see
-// src/lib/category.ts) — a decorative/organizational system, unrelated to the
-// nutrition chips' protein/fat/sugar/fiber colors shown on the recipe detail
-// page.
+// Recipe card. Every number below is traced from the "Cards Layout +
+// Category Color Scheme" frame in the user's Figma file, measured element by
+// element in the desktop app's Design panel (the Figma MCP connector is hard
+// rate-limited on the Starter plan, so canvas inspection is the only route
+// to real values). Raw measurements, all in Figma units:
+//
+//   card group        737 × 718
+//   body rect         697 × 471.5   fill = category "light"      (#B2D9D7 teal)
+//   content inset      48 from the body's left edge
+//   "Category"        Poppins Medium 35 / 110%, at y 0 of the body
+//   recipe title      Poppins SemiBold 75 / 115%, box 568 × 128, at y 107.5
+//   pill background   420 × 48, radius 250, fill = "mid"         (#89B9B9)
+//   pill text         Geist Mono Medium 28 / 110%, centred, fill = "pale" (#D7FFFD)
+//
+// Those are expressed below as fractions of the card width so the whole card
+// scales as one unit, then instantiated at CARD_W. The previous version got
+// this wrong in exactly one way the user flagged: it treated the title as a
+// 15px label sitting *below* a category line. In the real design the title is
+// the loudest thing on the card by a wide margin — 75/35 ≈ 2.1× the category
+// label — and the category label isn't a line of body text at all, it lives
+// inside a raised tab that jogs up into the photo. Hence the two structural
+// changes here: the title's dramatic size step, and the tab.
+//
+// Category *color* is auto-assigned from the recipe's type (src/lib/category.ts)
+// — decorative/organizational, unrelated to the nutrition chips'
+// protein/fat/sugar/fiber colors on the recipe detail page.
+
+/** Card width in px. Everything else derives from it. Sized so a phone shows
+ *  one card plus a clear slice of the next, which is what makes the
+ *  horizontal strip read as scrollable without a visible affordance. */
+const CARD_W = 240;
+const u = (figmaUnits: number) => Math.round((figmaUnits / 737) * CARD_W);
+
+const BODY_H = u(471.5);
+const INSET = u(48 + 20); // body inset is measured from the body edge, which
+// itself sits 20 units in from the card group's bounding box.
+const TAB_H = u(92); // height of the raised "Category" tab = the label's box.
+// The photo isn't simply "card height minus body height": the body's tab
+// overlaps the photo, so photo + body − tab must equal the 718-unit card.
+const PHOTO_H = u(718) - BODY_H + TAB_H;
+
 function RecipeCard({
   recipe,
   category,
@@ -187,12 +231,26 @@ function RecipeCard({
   const badgeText = recipe.needs_review ? "Needs review" : (recipe.nutritionFlags[0] ?? null);
   const badgeVariant = recipe.needs_review ? "solid" : "glass";
 
+  // Footer stat. Calories are the designed content — the pill in Figma reads
+  // "10,250 cKal per 100gr" / "450 cKal Per Serving", i.e. a nutrition value
+  // with a qualifier, not a cook time. Time is only the fallback for recipes
+  // whose ingredients never resolved to any nutrition data at all.
+  const stat =
+    recipe.calories != null
+      ? `${Math.round(recipe.calories).toLocaleString("en-US")} kcal ${
+          recipe.caloriesPerServing ? "per serving" : "total"
+        }`
+      : recipe.total_time_min != null
+        ? `${recipe.total_time_min} min`
+        : null;
+
   return (
     <Link
       href={`/recipe/${recipe.id}`}
-      className="group block overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
+      style={{ width: CARD_W }}
+      className="group block shrink-0 overflow-hidden rounded-[28px] shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
     >
-      <div className="relative h-36 w-full overflow-hidden bg-card">
+      <div style={{ height: PHOTO_H }} className="relative w-full overflow-hidden bg-card">
         {recipe.cover_image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -201,7 +259,9 @@ function RecipeCard({
             className="h-full w-full object-cover transition group-hover:scale-105"
           />
         ) : (
-          <div className={`flex h-full w-full items-center justify-center text-3xl font-bold ${styles.titleText} ${styles.cardBg}`}>
+          <div
+            className={`flex h-full w-full items-center justify-center font-heading text-3xl font-semibold ${styles.titleText} ${styles.cardBg}`}
+          >
             {recipe.title.charAt(0).toUpperCase()}
           </div>
         )}
@@ -217,12 +277,14 @@ function RecipeCard({
           //    pill silhouette but inverts to a dark scrim, so it holds
           //    contrast over light AND dark photos.
           //
-          // Sizing/placement traced from the Figma card (glass chip 295x48 at
-          // a 68px inset on a 737px-wide card ≈ 9% inset, 42% of the photo
-          // width); scaled to the app's ~165px card, with the text floored at
-          // 10px since a literal 0.22x scale would be unreadable.
+          // Left inset matches the body's content inset (both 48 units in
+          // Figma) so the badge, the category label, the title and the stat
+          // pill all share one left margin. Text floored at 10px — a literal
+          // scale of Figma's 28-unit type would land under 10 and stop being
+          // readable on a phone.
           <span
-            className={`absolute top-2.5 left-3.5 max-w-[calc(100%-1.75rem)] truncate rounded-full px-2 py-[3px] text-[10px] font-semibold backdrop-blur-md ${
+            style={{ left: INSET, top: u(40) }}
+            className={`absolute max-w-[calc(100%-2rem)] truncate rounded-full px-2 py-[3px] font-heading text-[10px] font-medium backdrop-blur-md ${
               badgeVariant === "solid"
                 ? "border border-white/50 bg-black/55 text-white"
                 : "border border-white bg-white/20 text-white"
@@ -232,55 +294,56 @@ function RecipeCard({
           </span>
         )}
       </div>
-      {/* Card body: pulled up over the photo's bottom edge and clipped to the
-          Figma "flag notch" — flat top-left to x≈340 (43% of the 697-wide
-          shape), a riser down to x≈427 (55.6%), then flat again out to the
-          right edge.
 
-          The notch DEPTH is the part that was visibly wrong before. The x
-          coordinates are percentages (so they shrink with the card) but the
-          depth was a hardcoded 28px carried over from the Figma artboard,
-          which meant the diagonal got dramatically steeper as the card
-          scaled down — a ~53° riser against Figma's ~31°. Depth has to scale
-          with the card too: Figma's riser runs 87.5 units across for 53.5
-          down, so at our card's ~165px width the 12.6% run is ~21px and the
-          matching drop is 21 * (53.5/87.5) ≈ 13px. That also lands within a
-          pixel of the depth implied by the body-height ratio (53.5/471.5 ≈
-          11.3% of a ~100px body), so both derivations agree.
+      {/* Card body, pulled up over the photo and clipped so its top edge is a
+          raised tab on the left holding the category label, then a short
+          diagonal riser down to the rest of the edge. In Figma the flat top
+          runs to ~43% of the body width and the riser lands at ~56%.
 
-          A straight-line clip-path needs no per-category SVG asset — it just
-          reuses the body's own bg color. */}
-      {/* `dir` goes on the body, not just the title, so a Hebrew recipe's
-          category label and stat pill right-align along with the title instead
-          of leaving the label stranded on the left of an otherwise RTL card.
-          The clip-path notch is unaffected by `dir` and deliberately stays put
-          — it's a fixed graphic element of the card, not text flow. */}
+          The depth is a px value derived from CARD_W rather than a clip-path
+          percentage, because clip-path resolves vertical percentages against
+          element *height* — and the body's height varies with how many lines
+          the title wraps to, which would make the tab grow and shrink per
+          card. A straight-line clip needs no per-category SVG asset either;
+          it just reuses the body's own background color. */}
       <div
-        dir={dirFor(recipe.title)}
-        className={`relative -mt-7 px-4 pb-4 pt-8 ${styles.cardBg}`}
-        style={{ clipPath: "polygon(0 0, 43% 0, 55.6% 13px, 100% 13px, 100% 100%, 0 100%)" }}
+        style={{
+          marginTop: -TAB_H,
+          minHeight: BODY_H,
+          paddingLeft: INSET,
+          paddingRight: INSET,
+          clipPath: `polygon(0 0, 43% 0, 56% ${TAB_H}px, 100% ${TAB_H}px, 100% 100%, 0 100%)`,
+        }}
+        className={`relative flex flex-col pb-4 ${styles.cardBg}`}
       >
-        <p className={`font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}>
+        <p
+          style={{ height: TAB_H }}
+          className={`flex items-center font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
+        >
           {CATEGORY_LABELS[category]}
         </p>
+        {/* `dir` on the title text only — never on the body. Putting it on the
+            container mirrors the whole card (tab on the right, pill on the
+            right) for a Hebrew recipe, and the app's chrome stays LTR
+            regardless of recipe language. */}
         <p
-          className={`mt-1 line-clamp-2 font-heading text-[15px] font-semibold leading-snug ${styles.titleText}`}
+          dir={dirFor(recipe.title)}
+          className={`mt-1 line-clamp-2 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
         >
           {recipe.title}
         </p>
-        {/* Footer stat pill. Figma's is 420x48 on a 697-wide body (≈60% width)
-            with centered Geist Mono Medium text, so this uses a min-width +
-            centered text rather than hugging its content. */}
-        {recipe.calories != null ? (
-          <span className={`mt-2 inline-block min-w-[4.5rem] rounded-full px-3 py-1 text-center font-mono text-[11px] font-medium ${styles.pillBg} ${styles.pillText}`}>
-            {Math.round(recipe.calories)} cal
+        {stat && (
+          // Figma's pill is 420 wide on a 697-wide body (≈60%) with centred
+          // Geist Mono Medium text, so this is a min-width + centred pill
+          // rather than one that hugs its content. `mt-auto` pins it to the
+          // bottom so pills line up across cards whose titles wrap to
+          // different numbers of lines.
+          <span
+            style={{ minWidth: u(420) }}
+            className={`mt-auto inline-block self-start rounded-full px-3 pt-[3px] pb-[4px] text-center font-mono text-[10px] font-medium ${styles.pillBg} ${styles.pillText}`}
+          >
+            {stat}
           </span>
-        ) : (
-          recipe.total_time_min && (
-            <span className={`mt-2 inline-block min-w-[4.5rem] rounded-full px-3 py-1 text-center font-mono text-[11px] font-medium ${styles.pillBg} ${styles.pillText}`}>
-              {recipe.total_time_min} min
-            </span>
-          )
         )}
       </div>
     </Link>

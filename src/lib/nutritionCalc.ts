@@ -15,6 +15,11 @@ export interface NutritionTotals {
   fiber_g: number | null;
   sugar_g: number | null;
   isEstimated: boolean;
+  /** True when `servings` was known, so these numbers are per-serving. False
+   *  when it wasn't and they're whole-recipe totals instead. Callers must
+   *  label the two differently — "2,104 kcal" reads as a per-portion number
+   *  and is wildly alarming when it's actually a tray of 30 meatballs. */
+  perServing: boolean;
 }
 
 interface IngredientNutrition {
@@ -39,7 +44,8 @@ export function computeNutritionTotals(
   ingredients: IngredientNutrition[],
   servings: number | null,
 ): NutritionTotals | null {
-  const divisor = servings && servings > 0 ? servings : 1;
+  const perServing = !!servings && servings > 0;
+  const divisor = perServing ? servings : 1;
   const totals: Record<(typeof NUTRITION_KEYS)[number], number | null> = {
     calories: null,
     protein_g: null,
@@ -69,14 +75,14 @@ export function computeNutritionTotals(
   }
 
   if (!anyValue) return null;
-  return { ...totals, isEstimated };
+  return { ...totals, isEstimated, perServing };
 }
 
 // Rough per-serving thresholds for the qualitative flags. Deliberately
 // simple (no RDA %, no age/sex adjustment) — good enough for "does this
 // recipe skew toward X" at a glance, not a clinical claim.
 export const NUTRIENT_DEFS: {
-  key: keyof Omit<NutritionTotals, "isEstimated">;
+  key: (typeof NUTRITION_KEYS)[number];
   label: string;
   unit: string;
   bg: string;
@@ -128,8 +134,13 @@ export const NUTRIENT_DEFS: {
 // NUTRIENT_DEFS (protein, fat, fiber, sugar) — used both to render the
 // detail page's flag pills and to pick a single flag for the home card's
 // glass badge.
+//
+// Returns nothing when the totals aren't per-serving: every threshold above
+// is a per-portion figure, so a whole tray of anything trips all four at
+// once and the badge stops carrying information. Better to show no badge
+// than a meaningless one.
 export function getNutritionFlags(totals: NutritionTotals | null): string[] {
-  if (!totals) return [];
+  if (!totals || !totals.perServing) return [];
   const flags: string[] = [];
   for (const n of NUTRIENT_DEFS) {
     if (!n.flagLabel || n.threshold == null) continue;

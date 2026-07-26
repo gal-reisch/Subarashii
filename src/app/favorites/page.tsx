@@ -56,6 +56,7 @@ export default async function FavoritesPage() {
       total_time_min: r.total_time_min,
       cuisine: r.cuisine,
       calories: totals?.calories ?? null,
+      caloriesPerServing: totals?.perServing ?? false,
       nutritionFlags: getNutritionFlags(totals),
     };
   });

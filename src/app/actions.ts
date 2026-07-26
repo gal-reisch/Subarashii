@@ -5,13 +5,18 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { detectLang, type Lang } from "@/lib/lang";
-import { parseInput } from "@/lib/parser";
+import { heuristicFromText, parseInput } from "@/lib/parser";
+import { extractRecipeFromImages } from "@/lib/parser/llm";
 import { classifyStepKind } from "@/lib/parser/stepKind";
 import { getHouseholdId, saveParsedRecipe } from "@/lib/recipes";
 import { createServiceClient } from "@/lib/supabase/service";
 import { SESSION_COOKIE } from "@/lib/session";
 import { detectTimerSeconds } from "@/lib/timers";
 import type { ParsedRecipe } from "@/lib/types";
+
+// Mirrors ScreenshotPicker's own cap — the client won't send more, but a
+// Server Action is a public POST endpoint and can't rely on that.
+const MAX_SCREENSHOTS = 8;
 
 function majorityLang(texts: string[]): Lang | null {
   if (texts.length === 0) return null;
@@ -29,6 +34,68 @@ export async function addFromUrlAction(formData: FormData) {
   // same pattern already used by /api/ingest.
   const supabase = createServiceClient();
   const parsed = await parseInput({ url });
+  const householdId = await getHouseholdId(supabase);
+  if (!householdId) throw new Error("No household found");
+
+  const { id } = await saveParsedRecipe(supabase, householdId, parsed, null);
+  revalidatePath("/");
+  redirect(`/recipe/${id}`);
+}
+
+// Save a recipe read out of one or more screenshots.
+//
+// The images arrive already downscaled to ~1600px JPEG by ScreenshotPicker,
+// as base64 in repeated `image` fields, in the order the user added them —
+// which matters, since a recipe split across three shots only reads correctly
+// in sequence.
+//
+// Unlike the URL and manual paths this one can genuinely come back empty (no
+// GEMINI_API_KEY configured, a blurry photo, a screenshot of something that
+// isn't a recipe). Rather than saving a blank recipe the user then has to
+// find and delete, it bounces back to /add with an error.
+export async function addFromScreenshotsAction(formData: FormData) {
+  const images = formData
+    .getAll("image")
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .slice(0, MAX_SCREENSHOTS)
+    .map((data) => ({ mimeType: "image/jpeg", data }));
+
+  if (images.length === 0) redirect("/add?tab=photo&error=no-images");
+
+  const llm = await extractRecipeFromImages(images);
+  if (!llm) redirect("/add?tab=photo&error=unreadable");
+
+  // Reuse the free-text draft shape (source_type, empty defaults) and let the
+  // extraction fill it in — same merge the caption path uses, so a screenshot
+  // import and an Instagram import produce identically-shaped rows.
+  const base = heuristicFromText("", "screenshot");
+  const parsed: ParsedRecipe = {
+    ...base,
+    title: llm.title?.trim() || "Saved recipe",
+    servings: llm.servings,
+    total_time_min: llm.total_time_min,
+    cuisine: llm.cuisine,
+    ingredients: llm.ingredients.map((raw_text) => ({
+      raw_text,
+      language: detectLang(raw_text),
+    })),
+    steps: llm.steps.map((text) => ({
+      text,
+      detected_timer_seconds: detectTimerSeconds(text),
+      kind: classifyStepKind(text),
+    })),
+    // Screenshots aren't stored anywhere (no storage bucket in this app), so
+    // there's nothing to point a cover image at and nothing to re-read later.
+    cover_image_url: null,
+    raw_capture: null,
+  };
+  parsed.primary_language = majorityLang([
+    ...parsed.ingredients.map((i) => i.raw_text),
+    ...parsed.steps.map((s) => s.text),
+  ]);
+  parsed.needs_review = parsed.ingredients.length === 0 || parsed.steps.length === 0;
+
+  const supabase = createServiceClient();
   const householdId = await getHouseholdId(supabase);
   if (!householdId) throw new Error("No household found");
 

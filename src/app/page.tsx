@@ -3,7 +3,15 @@ import { LinkButton } from "@/components/Button";
 import { RecipeBrowser, type CardRecipe } from "@/components/RecipeBrowser";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { computeNutritionTotals, getNutritionFlags } from "@/lib/nutritionCalc";
+import { randomQuote } from "@/lib/quotes";
 import { createServiceClient } from "@/lib/supabase/service";
+
+// The headline is a randomly-picked quote that has to change on every entry
+// to the app. Without this the page can be prerendered once and served from
+// the shell, freezing a single quote in place — `force-dynamic` makes each
+// request re-render, which is also what we want for a recipe list that
+// changes whenever something is saved from the share sheet.
+export const dynamic = "force-dynamic";
 
 // Raw shape of one row from the query below — includes the nested
 // per-ingredient nutrition columns needed to compute each card's calorie
@@ -53,6 +61,7 @@ export default async function Home() {
       total_time_min: r.total_time_min,
       cuisine: r.cuisine,
       calories: totals?.calories ?? null,
+      caloriesPerServing: totals?.perServing ?? false,
       nutritionFlags: getNutritionFlags(totals),
     };
   });
@@ -60,11 +69,7 @@ export default async function Home() {
   return (
     <div className="min-h-full">
       <main className="mx-auto max-w-3xl px-5 pb-32 pt-8">
-        <h1 className="text-4xl leading-tight">
-          Ella&apos;s
-          <br />
-          Recipe Box
-        </h1>
+        <h1 className="text-3xl leading-tight text-balance">{randomQuote()}</h1>
 
         {recipes.length === 0 ? (
           <EmptyState />

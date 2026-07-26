@@ -23,6 +23,7 @@ export default function NutritionPreviewPage() {
           fiber_g: 6,
           sugar_g: 18,
           isEstimated: true,
+          perServing: true,
         }}
       />
 
@@ -37,6 +38,7 @@ export default function NutritionPreviewPage() {
             fiber_g: 2,
             sugar_g: 4,
             isEstimated: false,
+            perServing: true,
           }}
         />
       </div>

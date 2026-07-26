@@ -139,18 +139,16 @@ export function CookMode({
               const checked = checkedIngredients.has(ing.id);
               return (
                 <li key={ing.id}>
-                  {/* `dir` sits on the button (the flex container), not on the
-                      text span, so the check circle mirrors to the right of a
-                      Hebrew ingredient instead of staying pinned left with the
-                      text jammed against it — same reasoning as the numbered
-                      step badges on the recipe detail page. `text-start`
-                      rather than `text-left` for the same reason: `text-left`
-                      is a hardcoded physical direction that silently defeats
-                      any inherited RTL. */}
+                  {/* `dir` stays on the text span only — never on the button
+                      (the flex container). Putting it on the container mirrors
+                      the check circle to the right, i.e. it flips the *UI*,
+                      and the app's chrome is meant to stay LTR regardless of
+                      recipe language. Only the ingredient text itself flows
+                      RTL. Same rule applies everywhere: layout LTR, text
+                      per-line. */}
                   <button
                     onClick={() => toggleIngredient(ing.id)}
-                    dir={dirFor(ing.raw_text)}
-                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-start shadow-[0px_4px_14px_rgba(0,0,0,0.05)] transition ${
+                    className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3.5 text-left shadow-[0px_4px_14px_rgba(0,0,0,0.05)] transition ${
                       checked ? "bg-border/40 text-muted line-through" : "bg-card"
                     }`}
                   >
@@ -161,7 +159,9 @@ export function CookMode({
                     >
                       {checked ? "✓" : ""}
                     </span>
-                    <span className="text-[15px]">{ing.raw_text}</span>
+                    <span dir={dirFor(ing.raw_text)} className="min-w-0 flex-1 text-[15px]">
+                      {ing.raw_text}
+                    </span>
                   </button>
                 </li>
               );
