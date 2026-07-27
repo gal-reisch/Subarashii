@@ -28,19 +28,40 @@ const FLICK_MIN_SPEED = 0.35;
  *  to the far end. */
 const FLICK_MAX_SPEED = 0.95;
 
-/** The ask, literally: a flick that used to travel one card should travel
- *  1.7. Because the strip snaps, the actual landing is rounded to a whole
- *  card — so a normal flick now advances two cards instead of one, and
- *  faster flicks scale up from there. */
-const REACH = 1.7;
+/** How far a flick reaches, in cards, before the strength ramp is applied.
+ *
+ *  This started at 1.7 (task #59, "make each swipe travel ~1.7x further") and
+ *  came back down. Combined with the ramp below, 1.7 put an ordinary flick two
+ *  cards along and a firm one four, and four cards is past the point where you
+ *  can still see where you came from — the strip stopped feeling like a shelf
+ *  you were pushing and started feeling like a slot machine. 1.4 keeps the
+ *  "further than one card" that was actually being asked for while landing in
+ *  a range you can follow with your eyes. */
+const REACH = 1.4;
 
-/** Hardest flick advances this many times the base reach. */
-const MAX_STRENGTH = 2.6;
+/** Hardest flick advances this many times the base reach. With REACH above,
+ *  the whole usable span is 2–3 cards. */
+const MAX_STRENGTH = 2;
 
 /** Only samples from the last moment of the gesture decide the velocity —
  *  what matters is how fast the finger was moving when it left, not the
  *  average over a long slow drag that ended with a twitch. */
 const VELOCITY_WINDOW_MS = 120;
+
+/** Glide timing. The duration scales with the distance so two cards and three
+ *  cards move at roughly the same speed rather than taking the same time —
+ *  a fixed duration is what makes a longer throw read as a teleport. */
+const GLIDE_MIN_MS = 260;
+const GLIDE_PER_PX = 0.42;
+const GLIDE_MAX_MS = 560;
+
+/** Decelerating, and only decelerating: the strip is already moving when the
+ *  finger leaves, so easing *in* would mean stopping dead and starting again.
+ *  Cubic rather than quadratic because the long tail is what makes catching it
+ *  mid-glide feel like grabbing something that's coasting. */
+function easeOutCubic(p: number): number {
+  return 1 - Math.pow(1 - p, 3);
+}
 
 interface Sample {
   x: number;
@@ -134,10 +155,97 @@ export function useHomeStrip(remember: boolean) {
     // through a native scroll.
     let samples: Sample[] = [];
 
+    // ---- The glide ---------------------------------------------------------
+    //
+    // Hand-animated rather than `scrollTo({ behavior: "smooth" })`, for the two
+    // things the native version can't do:
+    //
+    //   * It can't be stopped. A smooth scroll runs to its destination and
+    //     ignores everything until it gets there, so putting a finger down
+    //     mid-flight did nothing — the strip kept going, and the next flick
+    //     queued up behind it. Catching a moving thing is the most basic
+    //     expectation of a surface you throw with your hand, and it was the
+    //     specific complaint.
+    //   * Its curve and duration aren't ours. It's tuned for jumping to an
+    //     anchor, so it accelerates from a standstill — but the strip is
+    //     already at speed when the finger leaves, and easing *in* from that
+    //     reads as a stutter followed by a jump.
+    //
+    // Snapping is switched off for the duration and restored at the end. A
+    // `scroll-snap-type: x mandatory` container re-snaps after every scroll
+    // it's given, including each per-frame `scrollLeft` we write, which would
+    // quantise the animation into exactly the one-card hop we're replacing. The
+    // target is always a whole multiple of the pitch, so by the time snapping
+    // comes back the strip is already sitting on a snap point and nothing
+    // moves.
+    let rafId = 0;
+    let snapOff = false;
+
+    const restoreSnap = () => {
+      if (!snapOff) return;
+      snapOff = false;
+      node.style.scrollSnapType = "";
+    };
+
+    /** Stop a glide where it stands, leaving snapping off — the caller decides
+     *  when to hand control back, because restoring it under a finger that's
+     *  still down would snap the strip out from under the drag. */
+    const stopGlide = () => {
+      if (!rafId) return;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+
+    const glideTo = (to: number) => {
+      stopGlide();
+      const from = node.scrollLeft;
+      const dist = to - from;
+      if (Math.abs(dist) < 1) {
+        restoreSnap();
+        return;
+      }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        restoreSnap();
+        node.scrollLeft = to;
+        return;
+      }
+
+      node.style.scrollSnapType = "none";
+      snapOff = true;
+
+      const duration = Math.min(
+        GLIDE_MAX_MS,
+        GLIDE_MIN_MS + Math.abs(dist) * GLIDE_PER_PX,
+      );
+      const start = performance.now();
+      const step = (now: number) => {
+        const p = Math.min(1, (now - start) / duration);
+        node.scrollLeft = from + dist * easeOutCubic(p);
+        if (p < 1) {
+          rafId = requestAnimationFrame(step);
+          return;
+        }
+        rafId = 0;
+        restoreSnap();
+      };
+      rafId = requestAnimationFrame(step);
+    };
+
     const onTouchStart = (e: TouchEvent) => {
+      // The catch. Whatever the strip was doing, it's the finger's now.
+      stopGlide();
       const t = e.touches[0];
       if (!t) return;
       samples = [{ x: t.clientX, t: e.timeStamp }];
+    };
+
+    // Trackpads and mouse wheels don't produce touch events, and someone
+    // scrolling the strip by other means should be able to interrupt a glide
+    // too. Snapping goes straight back here because there's no finger down to
+    // pull the strip out from under.
+    const onWheel = () => {
+      stopGlide();
+      restoreSnap();
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -153,32 +261,37 @@ export function useHomeStrip(remember: boolean) {
     const onTouchEnd = () => {
       const boost = flickTarget(node, samples);
       samples = [];
-      if (boost === null) return;
+
+      if (boost === null) {
+        // Not a flick. Hand the release back to the browser, whose own snap is
+        // still the best one-card-at-a-time control there is — including when
+        // the gesture that just ended was a *catch*, where letting go without
+        // throwing should simply park on the nearest card.
+        restoreSnap();
+        return;
+      }
+
       // Next frame, so this lands after the browser has committed the end of
       // the gesture — issued synchronously in the touchend handler it can be
-      // overwritten by the native momentum-and-snap that starts immediately
-      // after.
-      requestAnimationFrame(() => {
-        node.scrollTo({
-          left: boost,
-          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-            ? "auto"
-            : "smooth",
-        });
-      });
+      // overwritten by the native momentum that starts immediately after.
+      requestAnimationFrame(() => glideTo(boost));
     };
 
     node.addEventListener("touchstart", onTouchStart, { passive: true });
     node.addEventListener("touchmove", onTouchMove, { passive: true });
     node.addEventListener("touchend", onTouchEnd, { passive: true });
     node.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    node.addEventListener("wheel", onWheel, { passive: true });
 
     return () => {
+      stopGlide();
+      restoreSnap();
       node.removeEventListener("scroll", onScroll);
       node.removeEventListener("touchstart", onTouchStart);
       node.removeEventListener("touchmove", onTouchMove);
       node.removeEventListener("touchend", onTouchEnd);
       node.removeEventListener("touchcancel", onTouchEnd);
+      node.removeEventListener("wheel", onWheel);
     };
   }, []);
 
@@ -204,7 +317,10 @@ function cardPitch(node: HTMLElement): number {
  * Exported for the sake of being testable in isolation; the geometry here is
  * the part most likely to need tuning.
  */
-export function flickTarget(node: HTMLElement, samples: Sample[]): number | null {
+export function flickTarget(
+  node: HTMLElement,
+  samples: Sample[],
+): number | null {
   if (samples.length < 2) return null;
 
   const first = samples[0];
@@ -225,8 +341,7 @@ export function flickTarget(node: HTMLElement, samples: Sample[]): number | null
 
   // A linear ramp from 1 at the flick threshold to MAX_STRENGTH at a hard
   // throw, clamped at both ends.
-  const ramp =
-    (speed - FLICK_MIN_SPEED) / (FLICK_MAX_SPEED - FLICK_MIN_SPEED);
+  const ramp = (speed - FLICK_MIN_SPEED) / (FLICK_MAX_SPEED - FLICK_MIN_SPEED);
   const strength = Math.min(
     MAX_STRENGTH,
     Math.max(1, 1 + ramp * (MAX_STRENGTH - 1)),

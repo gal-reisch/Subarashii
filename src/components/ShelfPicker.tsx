@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { createPortal, useFormStatus } from "react-dom";
 import {
   createCollectionAction,
   toggleRecipeInCollectionAction,
@@ -51,7 +51,9 @@ export function ShelfPicker({
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
+    // `preventScroll` so focusing the close button can't shift the page behind
+    // the sheet, same as DeleteRecipe and NutritionSource.
+    closeRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
@@ -86,76 +88,109 @@ export function ShelfPicker({
         )}
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Shelves"
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-5 pb-8 backdrop-blur-[2px] sm:items-center sm:pb-0"
-          onClick={() => setOpen(false)}
-        >
+      {/* Portalled to <body>, and not for tidiness — it's the only thing that
+          makes `fixed inset-0` mean the viewport here. This button lives in
+          RecipeTopBar, whose outer box carries `transform: translateZ(0)` to
+          keep the hide-on-scroll animation on the compositor. A transform makes
+          an element the containing block for every `position: fixed`
+          descendant, so the sheet was being laid out against the top bar
+          instead of the screen: it sat up under the bar (the "too high" bug)
+          rather than centred on the page. Same root cause as the home-card
+          delete dialog — see the longer note in DeleteRecipe.tsx.
+
+          `open` is only ever true after a click, so this never runs during the
+          server render and `document` is always there. */}
+      {open &&
+        createPortal(
           <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-[28px] bg-card p-6 shadow-[0px_24px_60px_rgba(0,0,0,0.25)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Shelves"
+            // Same backdrop and positioning as the delete dialog, deliberately:
+            // two sheets that do the same kind of job should arrive the same
+            // way. Auto margins rather than `items-end sm:items-center`, so a
+            // sheet taller than the viewport starts at the top and scrolls
+            // instead of overflowing above the scroll origin where it can't be
+            // reached — the shelf list can get long.
+            className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/35 px-5 py-8 backdrop-blur-[2px]"
+            onClick={() => setOpen(false)}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl leading-snug">Put it on a shelf</h2>
-                <p className="mt-1 text-sm text-muted">
-                  Tap to add or remove. A recipe can sit on as many as you like.
-                </p>
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] sm:my-auto"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg leading-snug">Put it on a shelf</h2>
+                  <p className="mt-1 text-sm text-muted">
+                    Tap to add or remove. A recipe can sit on as many as you
+                    like.
+                  </p>
+                </div>
+                <button
+                  ref={closeRef}
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close"
+                  className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition active:scale-90"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                ref={closeRef}
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition active:scale-90"
-              >
-                ✕
-              </button>
+
+              {shelves.length > 0 && (
+                <ul className="mt-5 max-h-64 space-y-2 overflow-y-auto">
+                  {shelves.map((shelf) => {
+                    const isMember = members.has(shelf.id);
+                    return (
+                      <li key={shelf.id}>
+                        <form action={toggleRecipeInCollectionAction}>
+                          <input
+                            type="hidden"
+                            name="recipe_id"
+                            value={recipeId}
+                          />
+                          <input
+                            type="hidden"
+                            name="collection_id"
+                            value={shelf.id}
+                          />
+                          <input
+                            type="hidden"
+                            name="is_member"
+                            value={String(isMember)}
+                          />
+                          <ShelfRow name={shelf.name} isMember={isMember} />
+                        </form>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <form action={createCollectionAction} className="mt-4 flex gap-2">
+                <input type="hidden" name="recipe_id" value={recipeId} />
+                <input
+                  name="name"
+                  placeholder="New shelf…"
+                  aria-label="New shelf name"
+                  className="min-w-0 flex-1 rounded-full bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
+                />
+                {/* Creating a shelf from here also files the recipe onto it
+                    (see createCollectionAction), so it earns the same line as
+                    ticking an existing shelf. */}
+                <button
+                  type="submit"
+                  onClick={() => showToast(shelvedLine(), "🗂️")}
+                  className="shrink-0 rounded-full bg-accent px-4 py-2.5 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
+                >
+                  Create
+                </button>
+              </form>
             </div>
-
-            {shelves.length > 0 && (
-              <ul className="mt-5 max-h-64 space-y-2 overflow-y-auto">
-                {shelves.map((shelf) => {
-                  const isMember = members.has(shelf.id);
-                  return (
-                    <li key={shelf.id}>
-                      <form action={toggleRecipeInCollectionAction}>
-                        <input type="hidden" name="recipe_id" value={recipeId} />
-                        <input type="hidden" name="collection_id" value={shelf.id} />
-                        <input type="hidden" name="is_member" value={String(isMember)} />
-                        <ShelfRow name={shelf.name} isMember={isMember} />
-                      </form>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            <form action={createCollectionAction} className="mt-4 flex gap-2">
-              <input type="hidden" name="recipe_id" value={recipeId} />
-              <input
-                name="name"
-                placeholder="New shelf…"
-                aria-label="New shelf name"
-                className="min-w-0 flex-1 rounded-full bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
-              />
-              {/* Creating a shelf from here also files the recipe onto it
-                  (see createCollectionAction), so it earns the same line as
-                  ticking an existing shelf. */}
-              <button
-                type="submit"
-                onClick={() => showToast(shelvedLine(), "🗂️")}
-                className="shrink-0 rounded-full bg-accent px-4 py-2.5 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
-              >
-                Create
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

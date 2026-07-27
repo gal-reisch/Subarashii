@@ -2,7 +2,11 @@
 
 :root {
   --background: #fcfdf7; /* cream — dominant neutral, ~70% of the UI */
-  --foreground: #2b2420; /* warm ink */
+  /* Not black, and not the warm brown-grey it used to be: the Figma file
+     specifies one ink for every dark text in the app, a deep plum out of the
+     same family as --accent. 12:1 on the cream background, so the softness is
+     in the hue rather than in the contrast. */
+  --foreground: #6c003d;
   --card: #ffffff;
   --muted: #8a7f76;
   --border: #ece2d5;
@@ -10,13 +14,13 @@
   /* Single brand accent, reserved for actionable/primary elements only
      (CTAs, active nav, links, prices/times) — soft pink per the user's own
      Figma style guide (task #24), replacing the earlier burnt-orange
-     food-delivery-kit accent. --accent-ink is a near-black ink for text/icons
-     sitting on solid --accent fills (buttons, FAB) — pink-on-cream usages
-     (e.g. nav glyphs) use --accent directly instead, per the Figma nav
-     component, and were not re-verified against WCAG AA — flagged in the
-     redesign plan as a possible contrast regression vs. the prior palette. */
+     food-delivery-kit accent. --accent-ink is the ink for text/icons sitting
+     on solid --accent fills (buttons, FAB); it's the same plum as
+     --foreground, which is the point — one dark colour in the whole app —
+     and lands at 6.6:1 on the pink. Pink-on-cream usages (e.g. nav glyphs)
+     use --accent directly instead, per the Figma nav component. */
   --accent: #f4a6d2;
-  --accent-ink: #1a1a1a;
+  --accent-ink: #6c003d;
 
   /* Two derivatives of --accent, both introduced for the nutrition chips.
      --accent-soft is the light end of the gradient on the "High Sugar"-style

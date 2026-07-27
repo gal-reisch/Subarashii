@@ -16,10 +16,17 @@ import type { Lang } from "./lang";
 // was right and the frame around it was wrong.
 //
 // So the boundary moves from "the whole app is LTR" to "the app is LTR, the
-// recipe is in its own language". Everything from the cover image down to the
-// delete button flips together and speaks Hebrew; everything above and around
-// it does not. That's the line the user drew, and it's a coherent one: the
-// recipe body is content, the chrome is furniture.
+// recipe is in its own language". Everything from the cover image down through
+// the body flips together and speaks Hebrew; everything above and around it
+// does not. That's the line the user drew, and it's a coherent one: the recipe
+// body is content, the chrome is furniture.
+//
+// The delete confirmation used to be on the recipe's side of that line and has
+// since moved back to the app's — a dialog asking whether you meant to throw
+// something away is the app talking, not the recipe. Its copy now lives in
+// DeleteRecipe.tsx rather than here, which is deliberate: with no entry in this
+// table there's nothing for a future translation pass to fill in, so it can't
+// drift back.
 //
 // Passing these around: give a component the `Lang` and let it call
 // `recipeStrings()` itself. Do NOT pass a `RecipeStrings` object as a prop to a
@@ -51,7 +58,6 @@ export interface RecipeStrings {
   /** Accessible name for the estimated chip, which is a button. */
   estimatedHint: string;
   showMore: (n: number) => string;
-  deleteRecipe: string;
   servingsUnknown: string;
   serves: string;
   setServings: string;
@@ -81,12 +87,6 @@ export interface RecipeStrings {
     estimateNote: string;
     caveat: string;
   };
-  /** Delete confirmation, shown from the button at the bottom of the body. */
-  deleteLines: string[];
-  deleteBlurb: string;
-  keepIt: string;
-  confirmDelete: string;
-  deleting: string;
 }
 
 const en: RecipeStrings = {
@@ -103,8 +103,8 @@ const en: RecipeStrings = {
   wholeRecipe: "whole recipe",
   estimated: "Estimated",
   estimatedHint: "How this was worked out",
-  showMore: (n) => `Show ${n} more line${n === 1 ? "" : "s"} from the original source`,
-  deleteRecipe: "Delete recipe",
+  showMore: (n) =>
+    `Show ${n} more line${n === 1 ? "" : "s"} from the original source`,
   servingsUnknown: "This one never said how many it feeds. How many?",
   serves: "Serves",
   setServings: "Split it up",
@@ -145,22 +145,6 @@ const en: RecipeStrings = {
     caveat:
       "Weights are of the raw ingredients, so nothing here accounts for water cooked off. Treat it as a good ballpark, not a measurement.",
   },
-  deleteLines: [
-    "Straight to the bin, this one?",
-    "We never speak of this recipe again?",
-    "Delete it? It can't be un-deleted. Just so we're all clear.",
-    "This one's had a good run. Send it off?",
-    "Say the word and it's gone. Forever. No takebacks.",
-    "Are we breaking up with this recipe?",
-    "It's not you, it's the recipe. Delete it?",
-    "Deleting this. Last chance to change your mind.",
-    "Off it goes. You sure?",
-    "This recipe is about to stop existing. Cool?",
-  ],
-  deleteBlurb: "and everything in it — ingredients, steps, shelves.",
-  keepIt: "Keep it",
-  confirmDelete: "Delete",
-  deleting: "Deleting…",
 };
 
 // Hebrew. Written in the same register as the English — plain, a bit dry, no
@@ -175,13 +159,14 @@ const he: RecipeStrings = {
   servings: (n) => `${n} מנות`,
   minutes: (n) => `${n} דק׳`,
   source: "מקור ↗",
-  needsReview: "לא הצלחנו לקרוא את המתכון במלואו. הקישור נשמר — אפשר להשלים את הפרטים ידנית.",
+  needsReview:
+    "לא הצלחנו לקרוא את המתכון במלואו. הקישור נשמר — אפשר להשלים את הפרטים ידנית.",
   perServing: (n) => (n ? `למנה · יוצא ${n} מנות` : "למנה"),
   wholeRecipe: "כל המתכון",
   estimated: "הערכה",
   estimatedHint: "איך חושבו הערכים",
-  showMore: (n) => (n === 1 ? "הצגת שורה נוספת מהמקור" : `הצגת ${n} שורות נוספות מהמקור`),
-  deleteRecipe: "מחיקת המתכון",
+  showMore: (n) =>
+    n === 1 ? "הצגת שורה נוספת מהמקור" : `הצגת ${n} שורות נוספות מהמקור`,
   servingsUnknown: "לא כתוב כאן לכמה מנות זה יוצא. לכמה?",
   serves: "יוצא",
   setServings: "לחלק",
@@ -206,7 +191,8 @@ const he: RecipeStrings = {
     method:
       "מכל שורת מצרך נשלפים הכמות והמצרך עצמו, הכמות מומרת לגרמים, והמצרך מחופש בטבלת הרכב מזון ומותאם למשקל הזה. הסכום של השורות למטה הוא הערכים של המתכון.",
     perServingNote: (n) => `הסכומים מחולקים ל־${n} מנות.`,
-    wholeRecipeNote: "המתכון לא ציין לכמה מנות הוא יוצא, ולכן הערכים הם לכל המתכון ולא למנה.",
+    wholeRecipeNote:
+      "המתכון לא ציין לכמה מנות הוא יוצא, ולכן הערכים הם לכל המתכון ולא למנה.",
     tableHeadIngredient: "מצרך",
     tableHeadSource: "מקור",
     unknownWeight: "משקל לא ידוע",
@@ -215,27 +201,13 @@ const he: RecipeStrings = {
     sourceEstimate: "הערכה",
     sourceNone: "אין נתונים",
     tzameretNote: "מאגר צמרת — מאגר הרכב המזון הלאומי של משרד הבריאות.",
-    usdaNote: "‏USDA FoodData Central, מאגר הרכב המזון של משרד החקלאות האמריקאי.",
+    usdaNote:
+      "‏USDA FoodData Central, מאגר הרכב המזון של משרד החקלאות האמריקאי.",
     estimateNote:
       "לא נמצאה התאמה באף טבלה, ולכן הערכים האלה הם הערכה של מודל שפה לשורה כפי שנכתבה. על זה בדיוק מתריע התג ״הערכה״.",
     caveat:
       "המשקלים הם של המצרכים הגולמיים, כך שאין כאן התחשבות בנוזלים שמתאדים בבישול. זה סדר גודל טוב, לא מדידה.",
   },
-  deleteLines: [
-    "ישר לפח, המתכון הזה?",
-    "לא מדברים עליו יותר לעולם?",
-    "למחוק? אי אפשר להחזיר אחר כך. רק שיהיה ברור.",
-    "היה לו מהלך יפה. לשלוח אותו?",
-    "מילה אחת והוא נעלם. לתמיד.",
-    "נפרדים מהמתכון הזה?",
-    "זה לא אתם, זה המתכון. למחוק?",
-    "הולך להימחק. הזדמנות אחרונה להתחרט.",
-    "המתכון הזה עומד להפסיק להתקיים. בסדר?",
-  ],
-  deleteBlurb: "וכל מה שבתוכו — מצרכים, שלבים, מדפים.",
-  keepIt: "משאירים",
-  confirmDelete: "מחיקה",
-  deleting: "מוחק…",
 };
 
 const STRINGS: Record<Lang, RecipeStrings> = { en, he };

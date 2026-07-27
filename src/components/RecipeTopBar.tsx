@@ -2,8 +2,17 @@
 
 import { useEffect, useState } from "react";
 
-// The recipe page's top bar: the same frosted-glass pill as the bottom nav,
-// pinned to the top, and out of the way while you're reading.
+// The recipe page's top bar: a back button and the two filing controls, pinned
+// to the top and out of the way while you're reading.
+//
+// Deliberately not a pill. It was one — the same frosted capsule as the bottom
+// nav — and floating a bordered, shadowed object over the top of a recipe made
+// the controls look like a thing sitting on the page rather than part of it,
+// competing with the cover image for the top of the screen. The bottom nav
+// earns its capsule because it's the app's furniture and belongs to no page;
+// this bar belongs to the recipe under it. So it's full-bleed, the same cream
+// as the background, and the only edge it draws is a hairline where it meets
+// the content — and only once there's content behind it to separate from.
 //
 // It used to be an ordinary row at the top of the document, which meant that
 // getting back to the box from halfway down a long recipe was a scroll all the
@@ -33,8 +42,14 @@ const ALWAYS_VISIBLE_ABOVE = 72;
  *  still accumulates and eventually triggers. */
 const DIRECTION_THRESHOLD = 8;
 
+/** Past this, the page has actually moved under the bar and the separator has
+ *  something to separate. At rest the line would just be a stray rule across
+ *  an empty cream header. */
+const SEPARATOR_AFTER = 4;
+
 export function RecipeTopBar({ children }: { children: React.ReactNode }) {
   const [visible, setVisible] = useState(true);
+  const [separated, setSeparated] = useState(false);
 
   useEffect(() => {
     let lastY = window.scrollY;
@@ -43,6 +58,7 @@ export function RecipeTopBar({ children }: { children: React.ReactNode }) {
     const evaluate = () => {
       ticking = false;
       const y = window.scrollY;
+      setSeparated(y > SEPARATOR_AFTER);
 
       if (y < ALWAYS_VISIBLE_ABOVE) {
         lastY = y;
@@ -72,38 +88,39 @@ export function RecipeTopBar({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      // `pointer-events-none` on the full-width outer box, re-enabled on the
-      // pill itself: parked off-screen the pill can't be hit, but this box
-      // stays where it is, and without this it would leave the top 70px of
-      // every recipe dead to taps exactly when the bar is meant to be gone.
-      className="pointer-events-none fixed inset-x-0 top-0 z-30 flex justify-center px-5"
+      // Keyboard focus can still reach these controls while the bar is parked
+      // off-screen, and a focus ring you can't see is worse than no bar at
+      // all. Tabbing into it brings it back.
+      onFocusCapture={() => setVisible(true)}
+      // Translated rather than unmounted or `display: none`d: the transform is
+      // composited, so the bar slides away without laying anything out, and the
+      // controls keep their DOM identity (a half-open shelf sheet isn't torn
+      // down because you scrolled).
+      //
+      // The whole fixed box moves now, not an inner pill inside a stationary
+      // wrapper, so there's no leftover full-width element sitting over the top
+      // of the recipe swallowing taps while the bar is away — which is what the
+      // old `pointer-events-none`/`-auto` pair was there to prevent. `-full` is
+      // exactly its own height and there's no drop shadow left to clear.
+      className={`fixed inset-x-0 top-0 z-30 border-b bg-background/85 backdrop-blur-xl transition-[transform,border-color] duration-300 ease-out motion-reduce:transition-none ${
+        visible ? "translate-y-0" : "-translate-y-full"
+      } ${separated ? "border-border/70" : "border-transparent"}`}
       style={{
-        paddingTop: "max(env(safe-area-inset-top), 0.75rem)",
+        paddingTop: "max(env(safe-area-inset-top), 0.5rem)",
         // Same reason as the bottom nav: iOS Safari repaints a fixed element
         // that also has a backdrop-filter in step with the scrolling content
         // rather than compositing it separately, so it drifts during a
-        // momentum scroll unless it's forced onto its own layer.
+        // momentum scroll unless it's forced onto its own layer. Note this is
+        // the `transform` property while the show/hide above rides on Tailwind
+        // v4's `translate` property — they compose rather than overwrite each
+        // other, which is why both can be here.
         transform: "translateZ(0)",
         willChange: "transform",
       }}
     >
-      <div
-        // Keyboard focus can still reach these controls while the bar is
-        // parked off-screen, and a focus ring you can't see is worse than no
-        // bar at all. Tabbing into it brings it back.
-        onFocusCapture={() => setVisible(true)}
-        // Translated rather than unmounted or `display: none`d: the transform
-        // is composited, so the bar slides away without laying anything out,
-        // and the controls keep their DOM identity (a half-open shelf sheet
-        // isn't torn down because you scrolled).
-        //
-        // `-translate-y-[200%]` overshoots deliberately — the pill has to clear
-        // its own drop shadow as well as its box, and 100% leaves a grey smear
-        // along the top edge.
-        className={`pointer-events-auto flex w-full max-w-2xl items-center justify-between rounded-full border border-white/60 bg-white/55 px-3 py-2 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl transition-transform duration-300 ease-out motion-reduce:transition-none ${
-          visible ? "translate-y-0" : "-translate-y-[200%]"
-        }`}
-      >
+      {/* Matches <main>'s `max-w-2xl px-5` so the back button lines up with the
+          recipe text rather than with the screen edge. */}
+      <div className="mx-auto flex max-w-2xl items-center justify-between px-5 pb-2">
         {children}
       </div>
     </div>

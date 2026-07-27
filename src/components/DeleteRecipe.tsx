@@ -3,45 +3,59 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { createPortal, useFormStatus } from "react-dom";
 import { deleteRecipeAction, type DeleteRecipeState } from "@/app/actions";
-import { dirFor, type Lang } from "@/lib/lang";
-import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
+import { dirFor } from "@/lib/lang";
 
-// Confirm copy lives in lib/recipeStrings.ts, in the same deadpan register as
-// the home-page headlines (see lib/homeGreeting.ts) and in both languages.
-// Deliberately low-key: this is a personal recipe box, not a bank transfer,
-// and a stern red "THIS CANNOT BE UNDONE" modal would be doing more emotional
-// work than the situation calls for. Still says the word "gone" somewhere,
-// though — the joke shouldn't cost you the recipe.
+// Deliberately low-key copy: this is a personal recipe box, not a bank
+// transfer, and a stern red "THIS CANNOT BE UNDONE" modal would be doing more
+// emotional work than the situation calls for. Still says the word "gone"
+// somewhere, though — the joke shouldn't cost you the recipe.
+//
+// English only, and the strings live here rather than in lib/recipeStrings.ts
+// with the rest of the recipe copy. Task #47 moved the boundary so that a
+// Hebrew recipe brings its own language to everything from the cover image
+// down; this dialog was inside that boundary and shouldn't have been. It
+// isn't part of the recipe — it's the app asking whether you meant to throw
+// something away, in the app's own voice, and a Hebrew recipe is no more
+// reason to ask in Hebrew than a Hebrew recipe is a reason to relabel the
+// bottom nav. Keeping the strings in this file is what stops it drifting back:
+// there's no shared table to add a translation to.
+const DELETE_LABEL = "Delete recipe";
+const LINES = [
+  "Straight to the bin, this one?",
+  "We never speak of this recipe again?",
+  "Delete it? It can't be un-deleted. Just so we're all clear.",
+  "This one's had a good run. Send it off?",
+  "Say the word and it's gone. Forever. No takebacks.",
+  "Are we breaking up with this recipe?",
+  "It's not you, it's the recipe. Delete it?",
+  "Deleting this. Last chance to change your mind.",
+  "Off it goes. You sure?",
+  "This recipe is about to stop existing. Cool?",
+];
+const BLURB = "and everything in it — ingredients, steps, shelves.";
+const KEEP_IT = "Keep it";
+const CONFIRM = "Delete";
+const DELETING = "Deleting…";
 
 // Picked on open rather than on render: the component is server-rendered as
 // part of the card list, and choosing a random line during render would make
 // the server and client markup disagree (hydration mismatch). By the time
 // the dialog opens we're client-only, so a fresh line every time is free.
-function randomLine(lines: string[]): string {
-  return lines[Math.floor(Math.random() * lines.length)];
+function randomLine(): string {
+  return LINES[Math.floor(Math.random() * LINES.length)];
 }
 
 export function DeleteRecipe({
   recipeId,
   title,
   variant,
-  lang,
 }: {
   recipeId: string;
   title: string;
   /** `"icon"` is the low-hierarchy × that sits on a home-page card;
    *  `"full"` is the labelled button on the recipe detail page. */
   variant: "icon" | "full";
-  /** Supplied by the recipe page so the dialog speaks the recipe's language.
-   *  Omitted on the home cards, which stay English regardless of what's on
-   *  them — same call as the card's own category label.
-   *
-   *  The language rather than the strings themselves, because RecipeStrings
-   *  holds functions and functions can't cross the server/client boundary.
-   *  See the note at the top of lib/recipeStrings.ts. */
-  lang?: Lang;
 }) {
-  const t = recipeStrings(lang ?? "en");
   const [line, setLine] = useState<string | null>(null);
   const open = line !== null;
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -85,7 +99,7 @@ export function DeleteRecipe({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            setLine(randomLine(t.deleteLines));
+            setLine(randomLine());
           }}
           aria-label={`Delete ${title}`}
           className="flex h-7 w-7 items-center justify-center rounded-full border border-white/50 bg-black/35 text-[15px] leading-none text-white/90 backdrop-blur-md transition hover:bg-black/55 active:scale-90"
@@ -97,10 +111,10 @@ export function DeleteRecipe({
       ) : (
         <button
           type="button"
-          onClick={() => setLine(randomLine(t.deleteLines))}
+          onClick={() => setLine(randomLine())}
           className="w-full rounded-full border border-border px-4 py-3 font-heading text-[15px] font-semibold text-muted transition active:scale-[0.98] hover:border-warn-text/40 hover:text-warn-text"
         >
-          {t.deleteRecipe}
+          {DELETE_LABEL}
         </button>
       )}
 
@@ -126,7 +140,7 @@ export function DeleteRecipe({
           <div
             role="dialog"
             aria-modal="true"
-            aria-label={t.deleteRecipe}
+            aria-label={DELETE_LABEL}
             className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/35 px-5 py-8 backdrop-blur-[2px]"
             onClick={() => setLine(null)}
           >
@@ -154,7 +168,7 @@ export function DeleteRecipe({
                 <span dir={dirFor(title)} className="font-semibold text-foreground">
                   {title}
                 </span>{" "}
-                {t.deleteBlurb}
+                {BLURB}
               </p>
 
               {state.message && (
@@ -183,12 +197,12 @@ export function DeleteRecipe({
                     onClick={() => setLine(null)}
                     className="w-full rounded-full bg-button-inactive-bg px-4 py-2.5 font-heading text-[15px] font-semibold text-foreground transition active:scale-[0.98]"
                   >
-                    {t.keepIt}
+                    {KEEP_IT}
                   </button>
                 </div>
                 <form action={formAction} className="min-w-0 flex-1">
                   <input type="hidden" name="recipe_id" value={recipeId} />
-                  <ConfirmButton t={t} />
+                  <ConfirmButton />
                 </form>
               </div>
             </div>
@@ -199,7 +213,7 @@ export function DeleteRecipe({
   );
 }
 
-function ConfirmButton({ t }: { t: RecipeStrings }) {
+function ConfirmButton() {
   const { pending } = useFormStatus();
   return (
     <button
@@ -211,7 +225,7 @@ function ConfirmButton({ t }: { t: RecipeStrings }) {
       // so a brown-red "danger" button was arguing with its own wording.
       className="w-full rounded-full bg-accent px-4 py-2.5 font-heading text-[15px] font-semibold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] transition active:scale-[0.98] disabled:opacity-60"
     >
-      {pending ? t.deleting : t.confirmDelete}
+      {pending ? DELETING : CONFIRM}
     </button>
   );
 }
