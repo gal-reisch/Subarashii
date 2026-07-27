@@ -49,19 +49,30 @@ export default async function RecipePage({
   const { id } = await params;
   const supabase = createServiceClient();
 
-  const { data: recipe } = await supabase
-    .from("recipe")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
-  if (!recipe) notFound();
-
+  // All five in one wave, not "fetch the recipe, then fetch its parts".
+  //
+  // The sequential version read naturally — you look up the recipe, then you
+  // look up what's in it — but nothing after the first query actually needed
+  // anything out of it. Every one of them filters on `recipe_id`, and that's
+  // `id` from the URL, which we already have. So the second round trip was
+  // waiting on an answer it wasn't going to use, and opening a recipe cost two
+  // round trips to Supabase where one would do. On a phone on mobile data
+  // that's the difference between one wait and two.
+  //
+  // The cost of being wrong about the id is four cheap queries that come back
+  // empty on a 404, which is a page nobody reaches on purpose. `notFound()`
+  // still fires before anything renders — and, per the loading.js docs, before
+  // any Suspense boundary below has had a chance to start streaming, which is
+  // what keeps the response an actual 404 rather than a 200 with 404-shaped
+  // content in it.
   const [
+    { data: recipe },
     { data: ingredients },
     { data: steps },
     { data: collections },
     { data: memberships },
   ] = await Promise.all([
+    supabase.from("recipe").select("*").eq("id", id).maybeSingle(),
     supabase
       .from("ingredient")
       .select(
@@ -80,6 +91,7 @@ export default async function RecipePage({
       .select("collection_id")
       .eq("recipe_id", id),
   ]);
+  if (!recipe) notFound();
 
   const ings = (ingredients ?? []) as Ingredient[];
   const stps = (steps ?? []) as Step[];

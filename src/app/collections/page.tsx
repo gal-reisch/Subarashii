@@ -12,23 +12,31 @@ interface CollectionRow {
 export default async function CollectionsPage() {
   const supabase = createServiceClient();
 
-  const { data: collections } = await supabase
-    .from("collection")
-    .select("id,name,sort_order")
-    .order("sort_order");
+  // Both at once. The membership query used to be filtered with
+  // `.in("collection_id", ids)`, which meant waiting for the shelves to come
+  // back before the counts could even be asked for — two round trips to get
+  // one screen. The filter wasn't buying anything: every `recipe_collection`
+  // row points at a shelf that exists, so restricting it to the shelves we
+  // just fetched can only ever match all of them. Dropping it lets the pair
+  // go out together, and the counting below ignores any id it wasn't asked
+  // about anyway.
+  //
+  // This is a personal recipe box, so "all the membership rows" is a few
+  // hundred at the outside. If it ever isn't, the right move is a grouped
+  // count in the database, not going back to two waits.
+  const [{ data: collections }, { data: memberships }] = await Promise.all([
+    supabase
+      .from("collection")
+      .select("id,name,sort_order")
+      .order("sort_order"),
+    supabase.from("recipe_collection").select("collection_id"),
+  ]);
 
   const cols = (collections ?? []) as CollectionRow[];
-  const ids = cols.map((c) => c.id);
 
   const counts = new Map<string, number>();
-  if (ids.length > 0) {
-    const { data: memberships } = await supabase
-      .from("recipe_collection")
-      .select("collection_id")
-      .in("collection_id", ids);
-    for (const m of memberships ?? []) {
-      counts.set(m.collection_id, (counts.get(m.collection_id) ?? 0) + 1);
-    }
+  for (const m of memberships ?? []) {
+    counts.set(m.collection_id, (counts.get(m.collection_id) ?? 0) + 1);
   }
 
   return (

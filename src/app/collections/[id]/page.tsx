@@ -29,18 +29,20 @@ export default async function CollectionPage({
   const { id } = await params;
   const supabase = createServiceClient();
 
-  const { data: collection } = await supabase
-    .from("collection")
-    .select("id,name")
-    .eq("id", id)
-    .maybeSingle();
+  // Both at once — the members query filters on `collection_id`, which is `id`
+  // from the URL, so it never needed to wait for the shelf row. Same change as
+  // the recipe page; see the longer note there.
+  const [{ data: collection }, { data: members }] = await Promise.all([
+    supabase.from("collection").select("id,name").eq("id", id).maybeSingle(),
+    supabase
+      .from("recipe_collection")
+      .select(
+        "recipe:recipe_id(id,title,cover_image_url,needs_review,total_time_min)",
+      )
+      .eq("collection_id", id)
+      .order("sort_order"),
+  ]);
   if (!collection) notFound();
-
-  const { data: members } = await supabase
-    .from("recipe_collection")
-    .select("recipe:recipe_id(id,title,cover_image_url,needs_review,total_time_min)")
-    .eq("collection_id", id)
-    .order("sort_order");
 
   const recipes = ((members ?? []) as unknown as MemberRow[])
     .map((m) => m.recipe)
@@ -92,52 +94,61 @@ export default async function CollectionPage({
               // link, which would otherwise render as a broken-image icon.
               const cover = normalizeImageUrl(r.cover_image_url);
               return (
-              <div key={r.id} className="group relative flex flex-col">
-                <Link
-                  href={`/recipe/${r.id}`}
-                  className="flex flex-1 flex-col items-center rounded-[28px] bg-card px-4 pb-4 pt-6 text-center shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
-                >
-                  <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-accent/10">
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={cover}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/50">
-                        {r.title.charAt(0).toUpperCase()}
-                      </div>
+                <div key={r.id} className="group relative flex flex-col">
+                  <Link
+                    href={`/recipe/${r.id}`}
+                    className="flex flex-1 flex-col items-center rounded-[28px] bg-card px-4 pb-4 pt-6 text-center shadow-[0px_16px_40px_rgba(0,0,0,0.08)] transition active:scale-[0.98]"
+                  >
+                    <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full bg-accent/10">
+                      {cover ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={cover}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-accent/50">
+                          {r.title.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    {r.needs_review && (
+                      <span className="mt-2 rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text">
+                        Needs review
+                      </span>
                     )}
-                  </div>
-                  {r.needs_review && (
-                    <span className="mt-2 rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text">
-                      Needs review
-                    </span>
-                  )}
-                  <p
-                    dir={dirFor(r.title)}
-                    className="mt-3 line-clamp-2 text-[15px] font-bold leading-snug"
+                    <p
+                      dir={dirFor(r.title)}
+                      className="mt-3 line-clamp-2 text-[15px] font-bold leading-snug"
+                    >
+                      {r.title}
+                    </p>
+                    {r.total_time_min && (
+                      <p className="mt-1 text-sm font-bold text-accent">
+                        {r.total_time_min} min
+                      </p>
+                    )}
+                  </Link>
+                  <form
+                    action={removeRecipeFromCollectionAction}
+                    className="absolute right-2 top-2"
                   >
-                    {r.title}
-                  </p>
-                  {r.total_time_min && (
-                    <p className="mt-1 text-sm font-bold text-accent">{r.total_time_min} min</p>
-                  )}
-                </Link>
-                <form action={removeRecipeFromCollectionAction} className="absolute right-2 top-2">
-                  <input type="hidden" name="recipe_id" value={r.id} />
-                  <input type="hidden" name="collection_id" value={collection.id} />
-                  <button
-                    type="submit"
-                    aria-label={`Remove ${r.title} from this shelf`}
-                    className="flex h-7 w-7 items-center justify-center rounded-full bg-card text-sm font-semibold shadow-[0px_4px_10px_rgba(0,0,0,0.12)] active:scale-90"
-                  >
-                    ✕
-                  </button>
-                </form>
-              </div>
+                    <input type="hidden" name="recipe_id" value={r.id} />
+                    <input
+                      type="hidden"
+                      name="collection_id"
+                      value={collection.id}
+                    />
+                    <button
+                      type="submit"
+                      aria-label={`Remove ${r.title} from this shelf`}
+                      className="flex h-7 w-7 items-center justify-center rounded-full bg-card text-sm font-semibold shadow-[0px_4px_10px_rgba(0,0,0,0.12)] active:scale-90"
+                    >
+                      ✕
+                    </button>
+                  </form>
+                </div>
               );
             })}
           </div>
