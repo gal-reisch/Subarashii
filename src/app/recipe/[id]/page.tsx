@@ -12,7 +12,7 @@ import { ShelfPicker } from "@/components/ShelfPicker";
 import { setServingsAction } from "@/app/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { dirFor, recipeLang } from "@/lib/lang";
-import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
+import { RECIPE_UI as t } from "@/lib/recipeStrings";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
 import { mergeUnclosedParens } from "@/lib/parser/mergeSteps";
 import { classifyStepKind } from "@/lib/parser/stepKind";
@@ -99,30 +99,37 @@ export default async function RecipePage({
   const memberIds = new Set((memberships ?? []).map((m) => m.collection_id));
   const nutritionTotals = computeNutritionTotals(ings, recipe.servings);
 
-  // The recipe body — everything from the cover image down — is presented in
-  // the recipe's own language and direction. The page's chrome above it (back
-  // button, shelf picker, favourite toggle) and the bottom nav stay English
-  // and LTR.
+  // Language and direction are two different questions, and this page answers
+  // them differently on purpose.
   //
-  // This narrows the earlier rule rather than abandoning it. That rule ("no
-  // container-level dir; only per-line dirFor") existed because an even
-  // earlier pass had put `dir` on <main> and mirrored the back button and nav
-  // along with it. But swinging fully the other way left the frame fighting
-  // its contents: "Ingredients" and "Steps" sat hard left above perfectly
-  // right-aligned Hebrew, and the "6 servings · 720 min · Source" meta row
-  // ran the opposite way from the title directly above it. Half-mirrored read
-  // as broken rather than as neutral.
+  // *Language* isn't a question at all any more: every word the app says is
+  // English, on every recipe. An earlier pass (task #47) swapped the headings,
+  // the Start cooking button and the nutrition labels into Hebrew for a Hebrew
+  // recipe, which left a Hebrew "מתחילים לבשל" on the same screen as an English
+  // "Delete this recipe" and read as a half-finished translation rather than as
+  // a bilingual app. All the copy now comes from one English table — see the
+  // note at the top of lib/recipeStrings.ts.
   //
-  // So the boundary is now content vs. chrome instead of recipe-text vs.
-  // everything. Per-line `dirFor` stays exactly where it was — it's what
-  // handles a Latin ingredient inside a Hebrew list, which the container
-  // direction can't.
+  // *Direction* is still per recipe, because it isn't cosmetic: Hebrew that
+  // isn't mirrored is Hebrew you have to work to read. So the body from the
+  // cover image down keeps `dir="rtl"` for a Hebrew recipe, and the English
+  // headings inside it right-align above the right-aligned Hebrew they label.
+  // That's the coherent version of the frame: it follows the content, while
+  // the words in it stay the app's.
+  //
+  // Three places opt back out to LTR below — the meta row, the nutrition panel
+  // and (in its own file) the estimated-source dialog. They're the spots where
+  // `dir` reorders whole elements rather than just aligning them: a flex row
+  // of English facts would come out backwards, and "Source ↗" would put its
+  // arrow on the wrong side. Alignment is fine to mirror; sequence isn't.
+  //
+  // Per-line `dirFor` is untouched. It's what handles a Latin ingredient
+  // inside a Hebrew list, which a container direction can't.
   const lang = recipeLang(recipe.primary_language, [
     recipe.title,
     ...ings.map((i) => i.raw_text),
     ...stps.map((s) => s.text),
   ]);
-  const t = recipeStrings(lang);
   const bodyDir = lang === "he" ? "rtl" : "ltr";
 
   // See lib/imageUrl.ts — unwraps a stored Google-Images result link so an
@@ -197,7 +204,17 @@ export default async function RecipePage({
             The mono goes with it. It's the right treatment for a number you
             compare (the nutrition grid keeps it) and the wrong one for a
             number you read once on the way past. */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-semibold text-muted">
+          {/* `dir="ltr"` even in a Hebrew recipe. Everything in this row is
+            English chrome, and it's a flex row, so inheriting `rtl` would deal
+            the items out right-to-left — "Source ↗ · 720 min · 6 servings" —
+            and drop the arrow on the wrong side of its own label. The row is
+            centred, so forcing LTR costs nothing visually; it only fixes the
+            order. Cuisine is the one piece of recipe content in here and keeps
+            its own `dirFor` below. */}
+          <div
+            dir="ltr"
+            className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-semibold text-muted"
+          >
             {recipe.servings && <span>{t.servings(recipe.servings)}</span>}
             {recipe.total_time_min && (
               <span>{t.minutes(recipe.total_time_min)}</span>
@@ -277,12 +294,10 @@ export default async function RecipePage({
             <NutritionChips
               totals={nutritionTotals}
               servings={recipe.servings}
-              strings={t}
               servingsControl={
                 <ServingsControl
                   recipeId={recipe.id}
                   servings={recipe.servings}
-                  strings={t}
                 />
               }
               estimatedChip={
@@ -292,7 +307,6 @@ export default async function RecipePage({
                   // dialog's "divided by N" line can't claim a division that
                   // computeNutritionTotals didn't do.
                   servings={nutritionTotals.perServing ? recipe.servings : null}
-                  lang={lang}
                 />
               }
             />
@@ -419,9 +433,6 @@ export default async function RecipePage({
             action belongs. The home-page card carries the same action as a
             small ×; both open the same confirm dialog. */}
           <section className="mt-12">
-            {/* No `lang`: the confirm dialog is the app asking a question, not
-              part of the recipe, so it stays English even here. See the note
-              at the top of DeleteRecipe.tsx. */}
             <DeleteRecipe
               recipeId={recipe.id}
               title={recipe.title}
@@ -446,11 +457,9 @@ export default async function RecipePage({
 function ServingsControl({
   recipeId,
   servings,
-  strings,
 }: {
   recipeId: string;
   servings: number | null;
-  strings: RecipeStrings;
 }) {
   const unknown = servings == null;
 
@@ -463,7 +472,7 @@ function ServingsControl({
     >
       <input type="hidden" name="recipe_id" value={recipeId} />
       <label htmlFor="servings" className="font-semibold">
-        {unknown ? strings.servingsUnknown : strings.serves}
+        {unknown ? t.servingsUnknown : t.serves}
       </label>
       <input
         id="servings"
@@ -479,7 +488,7 @@ function ServingsControl({
         type="submit"
         className="rounded-full bg-accent px-3 py-1 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
       >
-        {unknown ? strings.setServings : strings.updateServings}
+        {unknown ? t.setServings : t.updateServings}
       </button>
     </form>
   );

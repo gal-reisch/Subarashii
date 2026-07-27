@@ -1,47 +1,38 @@
-import type { Lang } from "./lang";
-
-// UI copy for the *inside* of a recipe — the part of the app that belongs to
-// the recipe rather than to the app.
+// The recipe page's own copy — headings, buttons, labels, the nutrition
+// dialog. All of it English, always, and that is the whole point of the file.
 //
-// This is a deliberate, narrow exception to the app-is-LTR rule (task #25),
-// which still holds everywhere else: the bottom nav, the back button, the
-// shelf picker, the home page and the add flow are English and left-to-right
-// no matter what language a recipe is in. The rule was there to stop the
-// whole product mirroring itself around one Hebrew title, and it should be.
+// There used to be a Hebrew table beside this one (task #47), picked per
+// recipe by `recipeLang`. It's gone. The reasoning it was built on was that
+// the recipe body is content and should therefore speak the recipe's language
+// down to its furniture — but a Hebrew recipe then had a Hebrew "Start
+// cooking" sitting a few hundred pixels above an English delete button, and
+// the app looked like it couldn't decide what language it was. The user's rule
+// is simpler and it's the right one: every word the *app* says is English, in
+// every recipe. Only the words the recipe itself says are in the recipe's
+// language, and those come out of the database, not out of here.
 //
-// But it produced a page that was half-mirrored and read as broken: every
-// ingredient and step correctly right-aligned, with "Ingredients" and "Steps"
-// stranded at the far left above them, and a "6 servings · Source" meta row
-// running the opposite way from the title it described. The text direction
-// was right and the frame around it was wrong.
+// So the test for whether a string belongs in this file is no longer "is it
+// content or chrome" — everything here is chrome. It's "does the recipe page
+// say it". Nothing in here is language-dependent, there's no lookup, and
+// there's deliberately no seam for a second language to be threaded back
+// through: a future translation pass would have to add the mechanism as well
+// as the words, which is enough friction to make it a decision rather than an
+// accident.
 //
-// So the boundary moves from "the whole app is LTR" to "the app is LTR, the
-// recipe is in its own language". Everything from the cover image down through
-// the body flips together and speaks Hebrew; everything above and around it
-// does not. That's the line the user drew, and it's a coherent one: the recipe
-// body is content, the chrome is furniture.
+// Direction is a separate question from language and is still answered per
+// recipe. The body of a Hebrew recipe stays mirrored so its text reads
+// correctly, which means these English labels right-align above right-aligned
+// Hebrew. That's intended: the frame follows the content, the words don't.
+// The exceptions — the meta row, the nutrition panel, this file's dialog — are
+// forced back to LTR at their call sites, because they're pure chrome whose
+// element *order* would otherwise reverse. See the note in recipe/[id]/page.tsx.
 //
-// The delete confirmation used to be on the recipe's side of that line and has
-// since moved back to the app's — a dialog asking whether you meant to throw
-// something away is the app talking, not the recipe. Its copy now lives in
-// DeleteRecipe.tsx rather than here, which is deliberate: with no entry in this
-// table there's nothing for a future translation pass to fill in, so it can't
-// drift back.
-//
-// Passing these around: give a component the `Lang` and let it call
-// `recipeStrings()` itself. Do NOT pass a `RecipeStrings` object as a prop to a
-// client component — several fields are functions (`servings`, `minutes`,
-// `perServing`, `showMore`, `sourceDialog.perServingNote`), and functions can't
-// be serialized across the server/client boundary. React throws "Functions
-// cannot be passed directly to Client Components", the recipe page renders the
-// error boundary, and because this module is otherwise plain data the mistake
-// typechecks perfectly. Server components may hold a `RecipeStrings` freely;
-// only the boundary is the problem.
-//
-// Not translated on purpose: the nutrition *flag* pills on the home cards and
-// the category labels there. Those stay English even on a Hebrew card — see
-// the RTL card note in RecipeBrowser.tsx, which is the same call made for the
-// same reason (card chrome, not content).
+// Import `RECIPE_UI` directly wherever it's needed, including in client
+// components. Do not pass it as a prop across the server/client boundary:
+// several fields are functions (`servings`, `minutes`, `perServing`,
+// `showMore`, `sourceDialog.perServingNote`), React throws "Functions cannot
+// be passed directly to Client Components", and because this module is
+// otherwise plain data the mistake typechecks perfectly.
 
 export interface RecipeStrings {
   ingredients: string;
@@ -62,11 +53,6 @@ export interface RecipeStrings {
   serves: string;
   setServings: string;
   updateServings: string;
-  /** Per-nutrient labels for the stat grid, keyed by NUTRIENT_DEFS.key. */
-  nutrients: Record<string, string>;
-  /** Qualitative flag pills, keyed by the English flagLabel in NUTRIENT_DEFS
-   *  so the shared classification logic stays language-free. */
-  flags: Record<string, string>;
   /** Copy for the "where do these numbers come from" dialog. */
   sourceDialog: {
     title: string;
@@ -89,7 +75,7 @@ export interface RecipeStrings {
   };
 }
 
-const en: RecipeStrings = {
+export const RECIPE_UI: RecipeStrings = {
   ingredients: "Ingredients",
   steps: "Steps",
   nutrition: "Nutrition",
@@ -109,20 +95,6 @@ const en: RecipeStrings = {
   serves: "Serves",
   setServings: "Split it up",
   updateServings: "Update",
-  nutrients: {
-    calories: "Calories",
-    protein_g: "Protein",
-    carbs_g: "Carbs",
-    fat_g: "Fat",
-    fiber_g: "Fiber",
-    sugar_g: "Sugar",
-  },
-  flags: {
-    "High Protein": "High Protein",
-    "High Fat": "High Fat",
-    "High Fiber": "High Fiber",
-    "High Sugar": "High Sugar",
-  },
   sourceDialog: {
     title: "Where these numbers come from",
     close: "Close",
@@ -146,72 +118,3 @@ const en: RecipeStrings = {
       "Weights are of the raw ingredients, so nothing here accounts for water cooked off. Treat it as a good ballpark, not a measurement.",
   },
 };
-
-// Hebrew. Written in the same register as the English — plain, a bit dry, no
-// exclamation marks — rather than translated word for word. Cooking verbs are
-// in the impersonal plural ("מוסיפים", "מחלקים") because that's how Hebrew
-// recipes are written, and the app should sound like the recipes in it.
-const he: RecipeStrings = {
-  ingredients: "מצרכים",
-  steps: "אופן ההכנה",
-  nutrition: "ערכים תזונתיים",
-  startCooking: "מתחילים לבשל",
-  servings: (n) => `${n} מנות`,
-  minutes: (n) => `${n} דק׳`,
-  source: "מקור ↗",
-  needsReview:
-    "לא הצלחנו לקרוא את המתכון במלואו. הקישור נשמר — אפשר להשלים את הפרטים ידנית.",
-  perServing: (n) => (n ? `למנה · יוצא ${n} מנות` : "למנה"),
-  wholeRecipe: "כל המתכון",
-  estimated: "הערכה",
-  estimatedHint: "איך חושבו הערכים",
-  showMore: (n) =>
-    n === 1 ? "הצגת שורה נוספת מהמקור" : `הצגת ${n} שורות נוספות מהמקור`,
-  servingsUnknown: "לא כתוב כאן לכמה מנות זה יוצא. לכמה?",
-  serves: "יוצא",
-  setServings: "לחלק",
-  updateServings: "עדכון",
-  nutrients: {
-    calories: "קלוריות",
-    protein_g: "חלבון",
-    carbs_g: "פחמימות",
-    fat_g: "שומן",
-    fiber_g: "סיבים",
-    sugar_g: "סוכר",
-  },
-  flags: {
-    "High Protein": "עתיר חלבון",
-    "High Fat": "עתיר שומן",
-    "High Fiber": "עתיר סיבים",
-    "High Sugar": "עתיר סוכר",
-  },
-  sourceDialog: {
-    title: "מאיפה המספרים האלה",
-    close: "סגירה",
-    method:
-      "מכל שורת מצרך נשלפים הכמות והמצרך עצמו, הכמות מומרת לגרמים, והמצרך מחופש בטבלת הרכב מזון ומותאם למשקל הזה. הסכום של השורות למטה הוא הערכים של המתכון.",
-    perServingNote: (n) => `הסכומים מחולקים ל־${n} מנות.`,
-    wholeRecipeNote:
-      "המתכון לא ציין לכמה מנות הוא יוצא, ולכן הערכים הם לכל המתכון ולא למנה.",
-    tableHeadIngredient: "מצרך",
-    tableHeadSource: "מקור",
-    unknownWeight: "משקל לא ידוע",
-    sourceTzameret: "צמרת",
-    sourceUsda: "USDA",
-    sourceEstimate: "הערכה",
-    sourceNone: "אין נתונים",
-    tzameretNote: "מאגר צמרת — מאגר הרכב המזון הלאומי של משרד הבריאות.",
-    usdaNote:
-      "‏USDA FoodData Central, מאגר הרכב המזון של משרד החקלאות האמריקאי.",
-    estimateNote:
-      "לא נמצאה התאמה באף טבלה, ולכן הערכים האלה הם הערכה של מודל שפה לשורה כפי שנכתבה. על זה בדיוק מתריע התג ״הערכה״.",
-    caveat:
-      "המשקלים הם של המצרכים הגולמיים, כך שאין כאן התחשבות בנוזלים שמתאדים בבישול. זה סדר גודל טוב, לא מדידה.",
-  },
-};
-
-const STRINGS: Record<Lang, RecipeStrings> = { en, he };
-
-export function recipeStrings(lang: Lang): RecipeStrings {
-  return STRINGS[lang];
-}

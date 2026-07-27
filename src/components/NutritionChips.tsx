@@ -27,15 +27,18 @@
 // recipe cards (glass badge) can reuse the exact same "High Protein" etc.
 // classification instead of re-deriving it — see RecipeBrowser.tsx.
 
-import { NUTRIENT_DEFS, getNutritionFlags, type NutritionTotals } from "@/lib/nutritionCalc";
-import type { RecipeStrings } from "@/lib/recipeStrings";
+import {
+  NUTRIENT_DEFS,
+  getNutritionFlags,
+  type NutritionTotals,
+} from "@/lib/nutritionCalc";
+import { RECIPE_UI } from "@/lib/recipeStrings";
 export type { NutritionTotals };
 
 export function NutritionChips({
   totals,
   servings,
   servingsControl,
-  strings,
   estimatedChip,
 }: {
   totals: NutritionTotals;
@@ -45,11 +48,6 @@ export function NutritionChips({
    *  the recipe page. Passed in rather than imported so this component stays
    *  presentational and reusable. */
   servingsControl?: React.ReactNode;
-  /** Section labels in the recipe's own language. The nutrient names and flag
-   *  pills are looked up through this rather than read off NUTRIENT_DEFS,
-   *  because NUTRIENT_DEFS is shared with the home cards — which stay English
-   *  even for a Hebrew recipe (see the RTL card note in RecipeBrowser). */
-  strings: RecipeStrings;
   /** The clickable "Estimated" chip, passed in because it's a client
    *  component with its own dialog and this file is presentational. Only
    *  supplied when the totals are actually estimated. */
@@ -59,19 +57,29 @@ export function NutritionChips({
   if (present.length === 0) return null;
 
   const flagLabels = new Set(getNutritionFlags(totals));
-  const flags = present.filter((n) => n.flagLabel && flagLabels.has(n.flagLabel));
+  const flags = present.filter(
+    (n) => n.flagLabel && flagLabels.has(n.flagLabel),
+  );
 
   return (
-    <section className="mt-8">
+    // `dir="ltr"` regardless of the recipe. Every string in this panel is the
+    // app's own — "Nutrition", "per serving", "High Protein", "Calories" — and
+    // the two things it lays out are a flex row and a 3-column grid, both of
+    // which fill in reading order. Inherit `rtl` from a Hebrew recipe's body
+    // and the nutrients come out Sugar-first with the header's chips mirrored,
+    // which is nobody's intended reading order for English labels.
+    <section dir="ltr" className="mt-8">
       <div className="flex items-center gap-2">
-        <h2 className="text-[15px] font-bold">{strings.nutrition}</h2>
+        <h2 className="text-[15px] font-bold">{RECIPE_UI.nutrition}</h2>
         {/* This label used to read "per serving" unconditionally, including
             for recipes that never recorded a serving count — in which case
             computeNutritionTotals returns whole-recipe totals and the header
             was flatly lying. A tray of meatballs was being presented as a
             2,104 kcal portion. Say which of the two the numbers actually are. */}
         <span className="text-xs font-semibold text-muted">
-          {totals.perServing ? strings.perServing(servings) : strings.wholeRecipe}
+          {totals.perServing
+            ? RECIPE_UI.perServing(servings)
+            : RECIPE_UI.wholeRecipe}
         </span>
         {totals.isEstimated && estimatedChip}
       </div>
@@ -87,7 +95,7 @@ export function NutritionChips({
               key={n.key}
               className="flag-glow rounded-full bg-gradient-to-br from-accent to-accent-soft px-3.5 py-1.5 font-heading text-sm font-semibold text-accent-ink"
             >
-              {strings.flags[n.flagLabel!] ?? n.flagLabel}
+              {n.flagLabel}
             </span>
           ))}
         </div>
@@ -99,16 +107,19 @@ export function NutritionChips({
             key={n.key}
             className="rounded-2xl border border-accent px-3 py-3 text-accent-deep"
           >
+            {/* Straight off NUTRIENT_DEFS. These used to be looked up through
+                a per-language table so a Hebrew recipe got "חלבון"; with the
+                app English everywhere that table was a verbatim copy of these
+                labels, and a copy is a thing that can drift. The home card's
+                badge reads the same field. */}
             <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
-              {strings.nutrients[n.key] ?? n.label}
+              {n.label}
             </div>
             <div className="mt-1 font-mono text-2xl font-extrabold leading-none">
-              {/* `dir` goes on an inline-block wrapper rather than on the row,
-                  so the value/unit pair keeps its internal LTR order ("32g",
-                  never "g32") while the block as a whole still hangs off
-                  whichever edge the section reads from. Putting dir on the
-                  row instead would left-align the number under a
-                  right-aligned label. */}
+              {/* Redundant against the section's own `dir` above, and kept
+                  anyway: it's what guarantees "32g" never renders as "g32" if
+                  this component is ever dropped into a mirrored context that
+                  the section-level attribute doesn't cover. */}
               <span dir="ltr" className="inline-block">
                 {Math.round(totals[n.key] as number)}
                 <span className="ml-0.5 text-sm font-bold">{n.unit}</span>

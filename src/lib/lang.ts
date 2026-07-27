@@ -28,15 +28,22 @@ const HEBREW_SHARE_FOR_RTL = 1 / 3;
 
 /**
  * The language a whole recipe should be *presented* in, which is a different
- * question from what any individual line is written in. Drives the recipe
- * page's overall direction and which set of section headings it uses; the
- * per-line `dirFor` calls still handle mixed content inside that.
+ * question from what any individual line is written in.
+ *
+ * Direction only. This used to pick the recipe page's section headings too,
+ * out of an English and a Hebrew table; the app's own copy is now English on
+ * every recipe, so the single thing left riding on this is whether the body
+ * is mirrored. The per-line `dirFor` calls still handle mixed content inside
+ * that.
  *
  * `stored` is the recipe's `primary_language` column, trusted when present —
  * it's set at import time from the source itself. Rows saved before that
  * column was populated fall back to counting lines.
  */
-export function recipeLang(stored: string | null | undefined, texts: string[]): Lang {
+export function recipeLang(
+  stored: string | null | undefined,
+  texts: string[],
+): Lang {
   if (stored === "he" || stored === "en") return stored;
   const lines = texts.filter((t) => t && t.trim());
   if (lines.length === 0) return "en";

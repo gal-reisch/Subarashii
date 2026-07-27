@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { dirFor, type Lang } from "@/lib/lang";
-import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
+import { dirFor } from "@/lib/lang";
+import { RECIPE_UI, type RecipeStrings } from "@/lib/recipeStrings";
 
 // "Estimated" used to be a flat amber chip that said a thing and then refused
 // to elaborate. It's the one label on the page that admits the numbers might
@@ -29,20 +29,19 @@ export interface SourceRow {
 export function NutritionSource({
   rows,
   servings,
-  lang,
 }: {
   rows: SourceRow[];
   /** Non-null only when the totals are per-serving. */
   servings: number | null;
-  /** The recipe's language, not the strings themselves: RecipeStrings holds
-   *  functions, and functions can't be serialized across the server/client
-   *  boundary. See the note at the top of lib/recipeStrings.ts. */
-  lang: Lang;
 }) {
   const [open, setOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const strings = recipeStrings(lang);
-  const t = strings.sourceDialog;
+  // Imported, not passed in. This used to take the recipe's `Lang` and look
+  // the copy up, specifically so a `RecipeStrings` object — which holds
+  // functions — never had to cross the server/client boundary. With one
+  // English table the lookup is gone and the import does the same job with
+  // nothing to serialize.
+  const t = RECIPE_UI.sourceDialog;
 
   // Same dialog mechanics as DeleteRecipe: Escape closes, the page behind
   // doesn't scroll, focus lands inside.
@@ -84,7 +83,7 @@ export function NutritionSource({
         aria-label={t.title}
         className="ms-auto flex items-center gap-1 rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text transition active:scale-95"
       >
-        {strings.estimated}
+        {RECIPE_UI.estimated}
         {/* The (i) is the whole affordance — the chip is otherwise identical
             to the static label it replaced, and a chip that looks like a
             label doesn't get tapped. Kept to a hairline circle at the chip's
@@ -99,10 +98,17 @@ export function NutritionSource({
       </button>
 
       {open && (
+        // `dir="ltr"`: this renders inside the recipe body, which is mirrored
+        // for a Hebrew recipe, but a modal is the app talking — same call as
+        // the delete confirmation. Without it an English dialog came out
+        // right-aligned with its close button and provenance tags mirrored.
+        // The ingredient rows inside still take their own `dirFor`, because
+        // those are the recipe's words.
         <div
           role="dialog"
           aria-modal="true"
           aria-label={t.title}
+          dir="ltr"
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-4 pb-4 backdrop-blur-[2px] sm:items-center sm:pb-0"
           onClick={() => setOpen(false)}
         >
@@ -113,7 +119,9 @@ export function NutritionSource({
             className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-6 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] outline-none"
           >
             <h2 className="text-xl leading-snug">{t.title}</h2>
-            <p className="mt-3 text-sm leading-relaxed text-muted">{t.method}</p>
+            <p className="mt-3 text-sm leading-relaxed text-muted">
+              {t.method}
+            </p>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               {servings ? t.perServingNote(servings) : t.wholeRecipeNote}
             </p>
@@ -131,14 +139,12 @@ export function NutritionSource({
                   <span dir={dirFor(row.raw_text)} className="min-w-0 flex-1">
                     {row.raw_text}
                   </span>
-                  {/* `dir` only in the numeric case: "1500 g" is a value/unit
-                      pair and inverts to "g 1500" if it inherits the dialog's
-                      RTL, but the fallback is a Hebrew sentence
-                      ("משקל לא ידוע") that must keep the dialog's direction. */}
-                  <span
-                    dir={row.grams_resolved != null ? "ltr" : undefined}
-                    className="shrink-0 font-mono text-[11px] text-muted"
-                  >
+                  {/* Both branches are English now — the weight and the
+                      "weight unknown" fallback — and the dialog is LTR, so
+                      this no longer needs the conditional `dir` that kept
+                      "1500 g" from inverting to "g 1500" under a Hebrew
+                      recipe's direction. */}
+                  <span className="shrink-0 font-mono text-[11px] text-muted">
                     {row.grams_resolved != null
                       ? `${Math.round(row.grams_resolved)} g`
                       : t.unknownWeight}
@@ -191,7 +197,9 @@ function SourceTag({
   return (
     <span
       className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-        estimated ? "bg-warn-bg text-warn-text" : "bg-accent/15 text-accent-deep"
+        estimated
+          ? "bg-warn-bg text-warn-text"
+          : "bg-accent/15 text-accent-deep"
       }`}
     >
       {label}

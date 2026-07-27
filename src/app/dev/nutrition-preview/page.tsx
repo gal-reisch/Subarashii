@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { NutritionChips } from "@/components/NutritionChips";
-import { recipeStrings } from "@/lib/recipeStrings";
 
 // DEV-ONLY visual QA harness for NutritionChips (task #20). Real recipe pages
 // never fabricate nutrition numbers — this route exists purely so the chip
@@ -10,13 +9,12 @@ import { recipeStrings } from "@/lib/recipeStrings";
 export default function NutritionPreviewPage() {
   if (process.env.NODE_ENV !== "development") notFound();
 
-  const en = recipeStrings("en");
-  const he = recipeStrings("he");
-
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
       <h1 className="text-2xl font-bold">NutritionChips — dev preview</h1>
-      <p className="mt-1 text-sm text-muted">Sample data only, not a real recipe.</p>
+      <p className="mt-1 text-sm text-muted">
+        Sample data only, not a real recipe.
+      </p>
 
       <NutritionChips
         totals={{
@@ -30,13 +28,13 @@ export default function NutritionPreviewPage() {
           perServing: true,
         }}
         servings={4}
-        strings={en}
       />
 
-      {/* The same panel in a Hebrew recipe's direction — the case the strings
-          refactor exists for. Worth having next to the English one: the thing
-          most likely to go wrong is the stat grid's numbers, which must stay
-          "32g" and not "g32" while the block itself hangs off the right. */}
+      {/* The same panel dropped inside a mirrored container, which is what a
+          Hebrew recipe's body is. The panel sets its own `dir="ltr"`, so the
+          expected result is that this block looks *identical* to the English
+          one above — same label order, same left edge, "32g" and never "g32".
+          Any difference between the two is the bug. */}
       <div dir="rtl" className="mt-10 border-t border-border pt-6">
         <NutritionChips
           totals={{
@@ -50,12 +48,13 @@ export default function NutritionPreviewPage() {
             perServing: true,
           }}
           servings={4}
-          strings={he}
         />
       </div>
 
       <div className="mt-10 border-t border-border pt-6">
-        <p className="text-sm text-muted">No flags triggered (below thresholds):</p>
+        <p className="text-sm text-muted">
+          No flags triggered (below thresholds):
+        </p>
         <NutritionChips
           totals={{
             calories: 180,
@@ -68,14 +67,13 @@ export default function NutritionPreviewPage() {
             perServing: true,
           }}
           servings={2}
-          strings={en}
         />
       </div>
 
       <div className="mt-10 border-t border-border pt-6">
         <p className="text-sm text-muted">
-          Unknown serving count — totals are for the whole recipe and the
-          header has to say so rather than claiming &quot;per serving&quot;:
+          Unknown serving count — totals are for the whole recipe and the header
+          has to say so rather than claiming &quot;per serving&quot;:
         </p>
         <NutritionChips
           totals={{
@@ -89,7 +87,6 @@ export default function NutritionPreviewPage() {
             perServing: false,
           }}
           servings={null}
-          strings={en}
         />
       </div>
     </div>
