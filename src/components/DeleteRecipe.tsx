@@ -7,7 +7,7 @@ import { dirFor, type Lang } from "@/lib/lang";
 import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
 
 // Confirm copy lives in lib/recipeStrings.ts, in the same deadpan register as
-// the home-page headlines (see lib/quotes.ts) and in both languages.
+// the home-page headlines (see lib/homeGreeting.ts) and in both languages.
 // Deliberately low-key: this is a personal recipe box, not a bank transfer,
 // and a stern red "THIS CANNOT BE UNDONE" modal would be doing more emotional
 // work than the situation calls for. Still says the word "gone" somewhere,

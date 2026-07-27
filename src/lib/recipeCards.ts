@@ -34,12 +34,16 @@ export interface CardRecipe {
   /** "High Protein"/"High Sugar"/etc, same classification as the recipe
    *  detail page's NutritionChips. */
   nutritionFlags: string[];
+  /** Not rendered on the card. The home page's headline uses it to say
+   *  something true about the box ("3 new ones since Sunday"), and the list
+   *  is already sorted by it, so this is cheaper than a second query. */
+  created_at: string;
 }
 
 const INGREDIENT_COLS =
   "calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,is_estimated,grams_resolved";
 const RECIPE_COLS =
-  "id,title,cover_image_url,source_type,needs_review,total_time_min,cuisine,servings";
+  "id,title,cover_image_url,source_type,needs_review,total_time_min,cuisine,servings,created_at";
 
 const columns = (withAuthor: boolean) =>
   `${RECIPE_COLS}${withAuthor ? ",author" : ""},ingredient(${INGREDIENT_COLS})`;
@@ -53,6 +57,7 @@ interface RecipeRow {
   total_time_min: number | null;
   cuisine: string | null;
   servings: number | null;
+  created_at: string;
   author?: string | null;
   ingredient:
     | {
@@ -120,5 +125,6 @@ function toCardRecipe(r: RecipeRow): CardRecipe {
     calories: totals?.calories ?? null,
     caloriesPerServing: totals?.perServing ?? false,
     nutritionFlags: getNutritionFlags(totals),
+    created_at: r.created_at,
   };
 }
