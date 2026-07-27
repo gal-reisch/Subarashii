@@ -39,7 +39,7 @@ export function ShelfPicker({
   memberIds: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const members = new Set(memberIds);
   const count = memberIds.length;
 
@@ -51,9 +51,11 @@ export function ShelfPicker({
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // `preventScroll` so focusing the close button can't shift the page behind
-    // the sheet, same as DeleteRecipe and NutritionSource.
-    closeRef.current?.focus({ preventScroll: true });
+    // The sheet, not the × inside it — focusing a button paints the browser's
+    // focus ring on it, which looks like a bug to anyone who opened this with
+    // a thumb. See the longer note in DeleteRecipe.tsx. `preventScroll` so
+    // focusing it can't shift the page behind the sheet.
+    sheetRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
@@ -116,8 +118,10 @@ export function ShelfPicker({
             onClick={() => setOpen(false)}
           >
             <div
+              ref={sheetRef}
+              tabIndex={-1}
               onClick={(e) => e.stopPropagation()}
-              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] sm:my-auto"
+              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] outline-none sm:my-auto"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -128,7 +132,6 @@ export function ShelfPicker({
                   </p>
                 </div>
                 <button
-                  ref={closeRef}
                   type="button"
                   onClick={() => setOpen(false)}
                   aria-label="Close"

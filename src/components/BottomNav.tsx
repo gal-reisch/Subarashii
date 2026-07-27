@@ -43,7 +43,18 @@ export function BottomNav() {
         willChange: "transform",
       }}
     >
-      <div className="relative flex w-full max-w-sm items-center rounded-full border border-white/60 bg-white/55 px-2 py-3 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] backdrop-blur-xl">
+      {/* The fill is thinner than it looks like it should be — 55% white down
+          to 40%, about a third more see-through — so the cards actually travel
+          *under* the bar instead of disappearing behind a panel. Real frosted
+          glass gives away what's behind it; that's the whole difference
+          between glass and a tinted card.
+
+          The blur goes up as the fill comes down. They're doing opposite jobs:
+          the fill is what makes text on top of the bar legible, the blur is
+          what stops whatever is behind it from being readable as *content*.
+          Thin the fill without deepening the blur and you don't get glass, you
+          get a window with a recipe title showing through the nav labels. */}
+      <div className="relative flex w-full max-w-sm items-center rounded-full border border-white/45 bg-white/40 px-2 py-3 shadow-[0px_16px_40px_rgba(0,0,0,0.12)] backdrop-blur-2xl">
         <div className="flex flex-1 justify-center">
           <NavIcon href="/" label="Home" active={isHome}>
             <HomeIcon active={isHome} />

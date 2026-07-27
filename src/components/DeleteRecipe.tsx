@@ -58,7 +58,7 @@ export function DeleteRecipe({
 }) {
   const [line, setLine] = useState<string | null>(null);
   const open = line !== null;
-  const cancelRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
   // On success the action redirects and this component goes away, so `state`
   // only ever holds a value when the delete actually failed — which is the
@@ -77,10 +77,26 @@ export function DeleteRecipe({
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // Focus lands on Cancel, not Delete — the destructive button should
-    // never be one stray Enter away. `preventScroll` so focusing it can't
-    // shift the page behind the dialog (same reason as NutritionSource).
-    cancelRef.current?.focus({ preventScroll: true });
+    // Focus moves to the sheet itself, not to a button inside it.
+    //
+    // It used to land on Cancel, on the reasoning that the destructive button
+    // should never be one stray Enter away — which is right, but the browser
+    // draws its focus ring on whatever you focus, so every tap of the × on a
+    // card opened a dialog with a blue box around "Keep it". Nobody who
+    // reached this dialog with their thumb asked to be shown where the
+    // keyboard was, and a focus ring nobody summoned reads as a rendering
+    // fault rather than as an affordance.
+    //
+    // Focusing the container gets the whole job done instead: the dialog is
+    // where the screen reader starts, Tab walks its buttons in order, Escape
+    // has something to fire from, and Enter still triggers nothing at all —
+    // which is a stronger guarantee than "Enter cancels". `outline-none` on
+    // the sheet suppresses the ring for the container itself, and the buttons
+    // keep theirs for anyone who actually tabs to them.
+    //
+    // `preventScroll` so focusing it can't shift the page behind the dialog
+    // (same reason as NutritionSource).
+    sheetRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
@@ -145,6 +161,10 @@ export function DeleteRecipe({
             onClick={() => setLine(null)}
           >
             <div
+              ref={sheetRef}
+              // Focusable only programmatically — it's a focus target, not a
+              // tab stop. See the effect above.
+              tabIndex={-1}
               // Stops a click inside the sheet from reaching the backdrop's
               // dismiss handler.
               onClick={(e) => e.stopPropagation()}
@@ -156,7 +176,7 @@ export function DeleteRecipe({
               // can't be scrolled to. Auto margins collapse to zero when
               // there's no free space, so the sheet just starts at the top and
               // the `overflow-y-auto` above reaches the rest.
-              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] sm:my-auto"
+              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] outline-none sm:my-auto"
             >
               <h2 className="text-lg leading-snug">{line}</h2>
               {/* The title is recipe content, so it keeps its own direction
@@ -192,7 +212,6 @@ export function DeleteRecipe({
               <div className="mt-5 flex gap-2">
                 <div className="min-w-0 flex-1">
                   <button
-                    ref={cancelRef}
                     type="button"
                     onClick={() => setLine(null)}
                     className="w-full rounded-full bg-button-inactive-bg px-4 py-2.5 font-heading text-[15px] font-semibold text-foreground transition active:scale-[0.98]"

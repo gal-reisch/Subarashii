@@ -102,7 +102,10 @@ export function RecipeTopBar({ children }: { children: React.ReactNode }) {
       // of the recipe swallowing taps while the bar is away — which is what the
       // old `pointer-events-none`/`-auto` pair was there to prevent. `-full` is
       // exactly its own height and there's no drop shadow left to clear.
-      className={`fixed inset-x-0 top-0 z-30 border-b bg-background/85 backdrop-blur-xl transition-[transform,border-color] duration-300 ease-out motion-reduce:transition-none ${
+      // Fill thinned from 85% to 60% and the blur deepened to compensate, same
+      // trade as the bottom nav — see the note there for why the two move in
+      // opposite directions.
+      className={`fixed inset-x-0 top-0 z-30 border-b bg-background/60 backdrop-blur-2xl transition-[transform,border-color] duration-300 ease-out motion-reduce:transition-none ${
         visible ? "translate-y-0" : "-translate-y-full"
       } ${separated ? "border-border/70" : "border-transparent"}`}
       style={{

@@ -40,7 +40,7 @@ export function NutritionSource({
   lang: Lang;
 }) {
   const [open, setOpen] = useState(false);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const strings = recipeStrings(lang);
   const t = strings.sourceDialog;
 
@@ -54,11 +54,15 @@ export function NutritionSource({
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    // `preventScroll`, because this sheet is taller than the viewport and the
-    // close button lives at the bottom of it. Focusing normally scrolls that
-    // button into view, so the dialog opened part-scrolled and the user landed
-    // below its title and method paragraph — the two things it exists to say.
-    closeRef.current?.focus({ preventScroll: true });
+    // The sheet, not a button inside it — a focused button gets the browser's
+    // focus ring drawn on it, which reads as a rendering fault to anyone who
+    // opened this by tapping. See the longer note in DeleteRecipe.tsx.
+    //
+    // `preventScroll` matters extra here: this sheet is taller than the
+    // viewport, and focusing something inside it scrolls that thing into view,
+    // so the dialog used to open part-scrolled with the user landing below its
+    // title and method paragraph — the two things it exists to say.
+    sheetRef.current?.focus({ preventScroll: true });
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
@@ -103,8 +107,10 @@ export function NutritionSource({
           onClick={() => setOpen(false)}
         >
           <div
+            ref={sheetRef}
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-6 shadow-[0px_24px_60px_rgba(0,0,0,0.25)]"
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-[28px] bg-card p-6 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] outline-none"
           >
             <h2 className="text-xl leading-snug">{t.title}</h2>
             <p className="mt-3 text-sm leading-relaxed text-muted">{t.method}</p>
@@ -150,7 +156,6 @@ export function NutritionSource({
             </div>
 
             <button
-              ref={closeRef}
               type="button"
               onClick={() => setOpen(false)}
               className="mt-5 w-full rounded-full bg-button-inactive-bg px-4 py-3 font-heading font-semibold text-foreground transition active:scale-[0.98]"
