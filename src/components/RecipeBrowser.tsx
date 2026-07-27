@@ -268,6 +268,26 @@ const TAB_PATH =
   "C366.18 49.1804 376.609 53.5 387.483 53.5 L656 53.5 " +
   "C678.644 53.5 697 71.8563 697 94.5 Z";
 
+// The Hebrew card's tab, from the same file's RTL example (`Rectangle 16`,
+// node 1536:68, in the "Cards Layout + Category Color Scheme" board). That
+// node carries `relativeTransform [[-1,0,717],[0,1,216.5]]` — a literal
+// horizontal mirror — which is why its raw path data still describes a tab on
+// the *left*: Figma stores the un-flipped geometry and flips it on render. So
+// the answer to "does the tab move for Hebrew?" is yes, unambiguously, and the
+// coordinates below are that node's path with every x mapped through 697 − x.
+//
+// Traced rather than done with `transform: scaleX(-1)` on the LTR path,
+// because the two aren't quite mirror images: the Hebrew tab's flat run is 30
+// units shorter (270 vs 300 before the diagonal). The category label is the
+// same English word in both, so this is the designer's hand rather than a
+// content difference — but it's what the file says, and a CSS flip would
+// silently substitute the LTR width.
+const TAB_PATH_RTL =
+  "M697 94.5 L697 41 C697 18.3563 678.644 0 656 0 L426.983 0 " +
+  "C416.109 0 405.68 4.31963 397.991 12.0086 L368.509 41.4914 " +
+  "C360.82 49.1804 350.391 53.5 339.517 53.5 L41 53.5 " +
+  "C18.356 53.5 0 71.8563 0 94.5 Z";
+
 function RecipeCard({
   recipe,
   category,
@@ -276,6 +296,22 @@ function RecipeCard({
   category: RecipeCategory;
 }) {
   const styles = CATEGORY_STYLES[category];
+
+  // Hebrew recipes get the mirrored card from the design file's RTL example
+  // (node 1536:62). What flips and what doesn't is not "everything" — it was
+  // decided element by element in Figma, and the split is:
+  //
+  //   flips   the tab (and so the category label riding in it), the title's
+  //           alignment, the footer pill
+  //   stays   the badge over the photo (its card-relative position is
+  //           byte-identical between the LTR and RTL examples), the delete ×
+  //           opposite it, and the *language* of every fixed string — the
+  //           category name and the pill's stat both stay English even on a
+  //           fully Hebrew card, because they're app chrome, not content.
+  //
+  // Keyed off the title rather than the recipe's stored language: the title is
+  // what the layout is built around, and it's the field that's always present.
+  const rtl = dirFor(recipe.title) === "rtl";
 
   // The badge slot fits one label. `needs_review` is a real, functionally
   // important state (parsing failed, details need manual entry) so it takes
@@ -390,7 +426,7 @@ function RecipeCard({
             aria-hidden
             className="block w-full"
           >
-            <path d={TAB_PATH} fill="currentColor" />
+            <path d={rtl ? TAB_PATH_RTL : TAB_PATH} fill="currentColor" />
           </svg>
           {/* The category label belongs *in* the tab — that's what the tab is
               for, and it's why the tab is only as wide as it is. An earlier
@@ -401,7 +437,7 @@ function RecipeCard({
               where the design puts it. `leading-none` because the box is
               positioned off the text's own top edge, not a line box. */}
           <p
-            style={{ left: INSET, top: LABEL_TOP }}
+            style={rtl ? { right: INSET, top: LABEL_TOP } : { left: INSET, top: LABEL_TOP }}
             className={`absolute font-heading text-[11px] font-medium uppercase leading-none tracking-wide ${styles.labelText}`}
           >
             {CATEGORY_LABELS[category]}
@@ -412,10 +448,20 @@ function RecipeCard({
           style={{ minHeight: BODY_H, paddingLeft: INSET, paddingRight: INSET }}
           className={`relative flex flex-col pb-5 ${styles.cardBg}`}
         >
-          {/* `dir` on the title text only — never on the body. Putting it on the
-              container mirrors the whole card (tab on the right, pill on the
-              right) for a Hebrew recipe, and the app's chrome stays LTR
-              regardless of recipe language. */}
+          {/* `dir` stays on the text, not on the body container. It looks like
+              `dir="rtl"` on the wrapper would do all the mirroring below for
+              free, but it would also mirror the two things the design keeps
+              put — the badge and the delete × — since those are placed with
+              logical `left`/`right` offsets that `dir` reinterprets. Flipping
+              the three elements that actually flip, explicitly, is the smaller
+              lie.
+
+              In Figma the Hebrew title's box is at the same x as the LTR one
+              and only its `textAlignHorizontal` changes to RIGHT, which leaves
+              it 81 units off the body's right edge while the category label
+              above it sits at 48. That asymmetry is a stray box position, not
+              intent — the design's own margin is 48 on both sides — so the
+              title right-aligns to the body's padding like everything else. */}
           <p
             dir={dirFor(recipe.title)}
             className={`line-clamp-3 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
@@ -429,9 +475,18 @@ function RecipeCard({
             // rather than a second title. Most recipes have no author, and
             // the row simply isn't rendered for those rather than reserving
             // an empty line.
+            // On a Hebrew card the byline is still usually a Latin name or an
+            // @handle, so `dir` is read off the author string itself — that
+            // keeps the name's own characters in their correct order — while
+            // the *alignment* follows the title, because the design hangs the
+            // whole text column off one edge. The two are separate properties
+            // and this is exactly the case that shows why: "by Ottolenghi"
+            // must read left-to-right and sit on the right.
             <p
               dir={dirFor(recipe.author)}
-              className={`mt-1 truncate text-[11px] font-medium opacity-70 ${styles.titleText}`}
+              className={`mt-1 truncate text-[11px] font-medium opacity-70 ${
+                rtl ? "text-right" : ""
+              } ${styles.titleText}`}
             >
               {recipe.author}
             </p>
@@ -442,9 +497,18 @@ function RecipeCard({
             // rather than one that hugs its content. `mt-auto` pins it to the
             // bottom so pills line up across cards whose titles wrap to
             // different numbers of lines.
+            // `dir="ltr"` is set explicitly rather than left to inherit: the
+            // stat is a number followed by a Latin unit ("450 kcal per 100g"),
+            // and it stays that way on a Hebrew card — the design file's RTL
+            // example keeps its pill reading "450 cKal Per Serving". Without
+            // the attribute the trailing unit would swap sides of the number
+            // once the surrounding context turns RTL.
             <span
+              dir="ltr"
               style={{ minWidth: u(420) }}
-              className={`mt-auto inline-block self-start rounded-full px-3 pt-[3px] pb-[4px] text-center font-mono text-[10px] font-medium ${styles.pillBg} ${styles.pillText}`}
+              className={`mt-auto inline-block rounded-full px-3 pt-[3px] pb-[4px] text-center font-mono text-[10px] font-medium ${
+                rtl ? "self-end" : "self-start"
+              } ${styles.pillBg} ${styles.pillText}`}
             >
               {stat}
             </span>
