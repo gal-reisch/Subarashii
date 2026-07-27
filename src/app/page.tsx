@@ -2,6 +2,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { LinkButton } from "@/components/Button";
 import { HomeGreeting } from "@/components/HomeGreeting";
 import { RecipeBrowser } from "@/components/RecipeBrowser";
+import { VersionMarker } from "@/components/VersionMarker";
 import {
   DEFAULT_TIME_ZONE,
   dayKey,
@@ -30,7 +31,11 @@ export default async function Home() {
 
   return (
     <div className="min-h-full">
-      <main className="mx-auto max-w-3xl px-5 pb-32 pt-8">
+      {/* `relative` so the build marker in the corner has something to anchor
+          to — see VersionMarker for why it's positioned rather than in flow. */}
+      <main className="relative mx-auto max-w-3xl px-5 pb-32 pt-8">
+        <VersionMarker />
+
         {/* The seed is drawn here, once per request, rather than inside the
             client component: it's what makes the line change on every entry
             to the app, and it has to survive the client re-picking the line
@@ -61,10 +66,13 @@ function boxContext(recipes: CardRecipe[]): BoxContext {
 
   return {
     total: recipes.length,
-    addedThisWeek: recipes.filter((r) => new Date(r.created_at).getTime() >= cutoff).length,
+    addedThisWeek: recipes.filter(
+      (r) => new Date(r.created_at).getTime() >= cutoff,
+    ).length,
     needsReview: recipes.filter((r) => r.needs_review).length,
-    quick: recipes.filter((r) => r.total_time_min != null && r.total_time_min <= QUICK_MINUTES)
-      .length,
+    quick: recipes.filter(
+      (r) => r.total_time_min != null && r.total_time_min <= QUICK_MINUTES,
+    ).length,
   };
 }
 
@@ -74,7 +82,8 @@ function EmptyState() {
       <div className="text-5xl">🍳</div>
       <h2 className="mt-4 text-xl">Your box is empty</h2>
       <p className="mt-2 max-w-xs text-sm text-muted">
-        Save your first recipe — paste a link, snap a screenshot, or type one in.
+        Save your first recipe — paste a link, snap a screenshot, or type one
+        in.
       </p>
       <LinkButton href="/add" className="mt-6 px-6 py-3 active:scale-95">
         + Add a recipe
