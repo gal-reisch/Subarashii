@@ -203,3 +203,138 @@ h3 {
     box-shadow: 0 0 14px 2px rgba(244, 166, 210, 0.6);
   }
 }
+
+/* The home strip's cards, dealt rather than scrolled off.
+   ------------------------------------------------------
+   The cards overlap by a sliver, so the strip reads as a stack rather than a
+   row, and the one leaving doesn't just slide out of frame — it tips off the
+   top of the deck and falls away, revealing the next card underneath.
+
+   Driven by a *view timeline* rather than a scroll listener. The whole ask
+   here is that it feel smooth, and a JS `scroll` handler writing transforms
+   is the one way to guarantee it won't: it runs on the main thread, one frame
+   behind the compositor-driven scroll it's reacting to, and it jitters on
+   exactly the momentum flick this is meant to make nice. A scroll-driven
+   animation is evaluated by the compositor alongside the scroll itself.
+
+   `view(inline)` measures this element's own progress across the scrollport
+   along the strip's scrolling axis, so each card animates on its own position
+   and no index bookkeeping is needed.
+
+   Two animations on two nested elements, rather than one animation on one.
+   The obvious version — a single keyframe set over the `cover` range, with a
+   "settled" plateau in the middle — was written first and is broken, subtly
+   enough to be worth recording. `cover` spans *scrollport + card*, so the
+   fraction of it during which a card is fully on screen depends on the
+   scrollport's width: a plateau tuned to 38%–62% on a 375px phone lands at
+   about 75% on an 800px window, which is well into the fall. The result was
+   a desktop strip whose leftmost card sat permanently half-dropped and
+   half-faded while in plain view.
+
+   `entry` and `exit` don't have that problem. They're defined by the card's
+   own traversal — entry runs from its leading edge appearing to the card
+   being wholly in view, exit from it first touching the far edge to being
+   wholly gone — so both are exactly one card-width of scrolling at every
+   viewport size, and "wholly in view" is the boundary between them rather
+   than a fraction to be guessed at.
+
+   Splitting across two elements is what makes two animations viable at all.
+   Both need `transform`, and two animations with `fill-mode: both` on one
+   element fight over it during their fill phases. Nested, they compose:
+   while a card is fully in view the entry animation is filling forwards at
+   its last keyframe and the exit animation filling backwards at its first,
+   both of which are the identity transform, so the card sits still. Opacity
+   composes by multiplication, which works out the same way. */
+@keyframes card-enter {
+  /* Coming in from the right, standing back in the stack. Opacity resolves
+     well before the scale does, on purpose: at rest, the sliver of the *next*
+     card peeking out from behind the current one is parked around 60% of this
+     range, and it should read as a solid card standing slightly behind — not
+     as a half-faded one. So it is opaque by 45%, and only the scale is still
+     catching up, which is the depth cue we actually want there. */
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 4%, 0) scale(0.88);
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Off the left edge: hinged near the top-left corner (see `transform-origin`
+   below) so the card pivots out of the deck and falls, rather than sliding
+   flat out of frame.
+
+   Where the opacity lands is set by the geometry, not by taste. The cards are
+   240 wide and step 212 at a time, so a card that has just been scrolled past
+   comes to rest at 212/240 — 88% — of this range, with the last 28px of it
+   still inside the strip. Anything still visible at that point is a permanent
+   translucent ghost sitting over the left edge of the card you're actually
+   looking at. Clearing by 85% puts the vanishing point just before the resting
+   position, where the card is a rotated sliver most of the way off the edge
+   and 100px below where it started. Both numbers are card-relative, so this
+   holds at any viewport width. */
+@keyframes card-drop {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  25% {
+    opacity: 1;
+  }
+  85%,
+  100% {
+    opacity: 0;
+  }
+  100% {
+    transform: translate3d(-6%, 46%, 0) rotate(11deg) scale(0.78);
+  }
+}
+
+/* Everything that drives the animations lives inside the @supports, including
+   `animation-name`. That's the point of putting it here rather than guarding
+   only `animation-timeline`: a browser without view timelines would otherwise
+   still see a named animation, fall back to the document's *time* timeline,
+   and play the whole deal-and-drop once on load — leaving every card face
+   down and invisible. Unsupported browsers get today's plain snap scroll,
+   which was already fine. */
+@supports (animation-timeline: view()) {
+  .card-enter,
+  .card-drop {
+    /* `auto` means "the length of the range", which is the only sensible
+       duration for a progress-driven animation. A time here would be ignored
+       at best. */
+    animation-duration: auto;
+    animation-fill-mode: both;
+    animation-timeline: view(inline);
+  }
+
+  .card-enter {
+    animation-name: card-enter;
+    animation-range: entry;
+    /* Decelerating, so it arrives rather than slams into place. */
+    animation-timing-function: ease-out;
+  }
+
+  .card-drop {
+    transform-origin: 20% 0%;
+    animation-name: card-drop;
+    animation-range: exit;
+    /* Accelerating, because it's a fall. */
+    animation-timing-function: ease-in;
+  }
+
+  /* The drop is decorative; the scrolling underneath it is the feature. Strip
+     the motion and the strip still snaps card to card, just without the
+     theatre. */
+  @media (prefers-reduced-motion: reduce) {
+    .card-enter,
+    .card-drop {
+      animation: none;
+    }
+  }
+}

@@ -112,10 +112,47 @@ export function RecipeBrowser({ recipes }: { recipes: CardRecipe[] }) {
         // border box and so cancels out the `px-5` gutter — the first card
         // ends up flush against the screen edge. Scroll-padding moves the
         // snapport in to match the gutter.
-        <div className="-mx-5 mt-3 flex snap-x snap-mandatory scroll-pl-5 gap-5 overflow-x-auto px-5 pb-6 pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {filtered.map((r) => (
-            <div key={r.id} className="snap-start">
-              <RecipeCard recipe={r} category={categories.get(r.id) ?? "general"} />
+        //
+        // The cards overlap (`-ml-7` on every card after the first, replacing
+        // the gap) so the strip reads as a stack, and each one animates itself
+        // off the top of that stack as it leaves — see `card-deal` in
+        // globals.css.
+        //
+        // `overflow-y-hidden` is written out rather than left to default:
+        // setting `overflow-x` to a scrolling value forces the *computed*
+        // `overflow-y` from `visible` up to `auto`, so the drop — which is
+        // downward — would have grown a vertical scrollbar on the strip. The
+        // oversized `pb-40` is the room that drop falls into (padding is part
+        // of a scroll container's clipped area, so the card stays visible
+        // through it) — sized past the deepest point of the fall, because the
+        // clip edge is a hard horizontal line and a card sliced by it stops
+        // looking like a card. `-mb-32` gives most of that space back to the
+        // layout, since nothing is ever *laid out* down there.
+        <div className="-mx-5 -mb-32 mt-3 flex snap-x snap-mandatory scroll-pl-5 overflow-x-auto overflow-y-hidden px-5 pb-40 pt-1 [scrollbar-width:none] [&>*+*]:-ml-7 [&::-webkit-scrollbar]:hidden">
+          {filtered.map((r, i) => (
+            // Three nested elements, each doing exactly one job.
+            //
+            // The outer one owns the snapping and stays still, because the
+            // scroll snap area is the *transformed* border box — animating the
+            // element that carries `snap-start` would let the drop drag its own
+            // snap point around mid-scroll.
+            //
+            // The inner two are the entry and the exit halves of the animation,
+            // which have to be separate elements so their transforms compose
+            // instead of overwriting each other during their fill phases. See
+            // `card-enter`/`card-drop` in globals.css for why that's the shape.
+            //
+            // Descending z-index — earlier cards on top — is what makes the
+            // overlap read the right way round: the card you're leaving lifts
+            // off the front of the deck to uncover the next, instead of
+            // sliding underneath it. Flex items honour z-index without
+            // `position`, so nothing here needs to be positioned.
+            <div key={r.id} className="snap-start" style={{ zIndex: filtered.length - i }}>
+              <div className="card-enter">
+                <div className="card-drop">
+                  <RecipeCard recipe={r} category={categories.get(r.id) ?? "general"} />
+                </div>
+              </div>
             </div>
           ))}
         </div>
