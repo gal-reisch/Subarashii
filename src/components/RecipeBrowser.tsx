@@ -192,7 +192,21 @@ const u = (figmaUnits: number) => Math.round((figmaUnits / 737) * CARD_W);
 
 const INSET = u(48 + 20); // body inset is measured from the body edge, which
 // itself sits 20 units in from the card group's bounding box.
-const TAB_H = u(92); // height of the raised "Category" tab = the label's box.
+// Height of the drawn top edge — the raised tab plus the panel's top-right
+// corner curve, which finishes 94.5 units down and so has to be inside the
+// same SVG or it gets clipped into a hard corner.
+//
+// Scaled against the body's own 697-unit width rather than through u(), which
+// divides by the 737-unit *outer* card width. The 40-unit difference is the
+// mat around the card in Figma, which this layout doesn't draw; using u() here
+// would squash the shape by ~6% and flatten the 45° diagonal off true.
+const TAB_H = Math.round((94.5 / 697) * CARD_W);
+
+// Where the category label's own top edge sits inside the tab. Figma gives the
+// label a 92-unit box starting at the panel's top with 32/35.2 type in it, so
+// the glyphs begin (92 − 35.2) / 2 ≈ 28.4 units down — comfortably inside the
+// 53.5-unit riser, which is the whole reason the riser is that tall.
+const LABEL_TOP = Math.round((28.4 / 697) * CARD_W);
 
 // The photo overlay furniture — the nutrition/needs-review badge on the left,
 // the delete × on the right. Tighter into the corners than the body's text
@@ -218,25 +232,41 @@ const BODY_H = u(471.5) + 24;
 // overlaps the photo, so photo + body − tab must equal the whole card.
 const PHOTO_H = u(718) - u(471.5) + TAB_H + 72;
 
-// The tab's top edge, as an SVG path across a 100 × TAB_H viewBox.
+// The body panel's top edge, traced exactly from the Figma file rather than
+// eyeballed from a screenshot.
 //
-// This edge used to be a `clip-path: polygon(...)`, which meant the riser
-// between the raised tab and the rest of the edge was a straight diagonal —
-// and that was the specific thing flagged as not matching the design: the
-// real edge curves, it doesn't cut. A polygon has no way to express that;
-// `path()` in clip-path does, but isn't safe to feed percentage widths.
+// Two earlier attempts got this wrong in opposite directions. The first was a
+// `clip-path: polygon()`, whose riser could only be a straight cut with hard
+// corners. The second over-corrected into a long cubic S-curve. Neither is
+// what the design does.
 //
-// So the edge is drawn as an actual filled <svg> in the body's own color,
-// sitting above the photo, with the rectangular remainder of the body
-// underneath it. `preserveAspectRatio="none"` lets the 100-unit-wide viewBox
-// stretch to whatever the card is, so the curve's shape is authored once in
-// convenient units and scales with the card.
+// The real shape, read off `Rectangle 12` in the Figma document (node
+// 1521:512) via the REST API, is a *straight 45° diagonal with rounded
+// joins at both ends* — the geometry below is that node's own path data, in
+// its own 697-unit-wide coordinate space, reversed to run clockwise from the
+// top-left and cut off below the right-hand corner:
 //
-// Reading the path: full-height left section out to 40%, a cubic that eases
-// down to the baseline by 58% (control points pulled well past their
-// anchors — that's what makes it an S-curve rather than a slump), then the
-// baseline out to the right edge and back around the bottom.
-const TAB_PATH = "M0 0 H40 C48 0 50 100 58 100 H100 V100 H0 Z";
+//   x   0 → 300    flat, raised (this is the tab holding the category label)
+//   x 300 → 329    round out of the flat, r≈41
+//   x 329 → 358    the diagonal proper: Δx 29.48, Δy 29.48, i.e. exactly 45°
+//   x 358 → 387    round into the low edge, r≈41
+//   x 387 → 656    flat, 53.5 units below the tab
+//   x 656 → 697    the panel's top-right corner, r≈41, ending 94.5 units down
+//
+// So the tab occupies the left 43% of the width and the riser is 53.5 units
+// — both of which the guessed version had wrong (40–58%, and a curve).
+//
+// The viewBox is the raw Figma numbers, so the proportions can't drift: at
+// CARD_W the scale factor is 240/697, which also makes the panel's 82-unit
+// bottom radius land on 28px — the card's existing `rounded-[28px]`, now
+// confirmed rather than coincidental.
+const TAB_VB_W = 697;
+const TAB_VB_H = 94.5;
+const TAB_PATH =
+  "M0 94.5 L0 41 C0 18.3563 18.3563 0 41 0 L300.017 0 " +
+  "C310.891 0 321.32 4.31963 329.009 12.0086 L358.491 41.4914 " +
+  "C366.18 49.1804 376.609 53.5 387.483 53.5 L656 53.5 " +
+  "C678.644 53.5 697 71.8563 697 94.5 Z";
 
 function RecipeCard({
   recipe,
@@ -355,35 +385,40 @@ function RecipeCard({
         <div style={{ marginTop: -TAB_H }} className={`relative ${styles.waveFill}`}>
           <svg
             style={{ height: TAB_H }}
-            viewBox="0 0 100 100"
+            viewBox={`0 0 ${TAB_VB_W} ${TAB_VB_H}`}
             preserveAspectRatio="none"
             aria-hidden
             className="block w-full"
           >
             <path d={TAB_PATH} fill="currentColor" />
           </svg>
+          {/* The category label belongs *in* the tab — that's what the tab is
+              for, and it's why the tab is only as wide as it is. An earlier
+              pass moved it down into the body because centring it left it
+              jammed against the card's top edge, but that was a symptom of the
+              tab being the wrong height, not of the label being in the wrong
+              place. With the traced geometry there's room, so it goes back
+              where the design puts it. `leading-none` because the box is
+              positioned off the text's own top edge, not a line box. */}
+          <p
+            style={{ left: INSET, top: LABEL_TOP }}
+            className={`absolute font-heading text-[11px] font-medium uppercase leading-none tracking-wide ${styles.labelText}`}
+          >
+            {CATEGORY_LABELS[category]}
+          </p>
         </div>
 
         <div
           style={{ minHeight: BODY_H, paddingLeft: INSET, paddingRight: INSET }}
           className={`relative flex flex-col pb-5 ${styles.cardBg}`}
         >
-          {/* The label used to be vertically centred in the tab, which put it
-              hard against the card's top edge. Nudged down onto its own line
-              under the tab so the text block starts where the eye expects a
-              text block to start. */}
-          <p
-            className={`pt-1 font-heading text-[11px] font-medium uppercase tracking-wide ${styles.labelText}`}
-          >
-            {CATEGORY_LABELS[category]}
-          </p>
           {/* `dir` on the title text only — never on the body. Putting it on the
               container mirrors the whole card (tab on the right, pill on the
               right) for a Hebrew recipe, and the app's chrome stays LTR
               regardless of recipe language. */}
           <p
             dir={dirFor(recipe.title)}
-            className={`mt-1.5 line-clamp-3 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
+            className={`line-clamp-3 font-heading text-[24px] font-semibold leading-[1.15] ${styles.titleText}`}
           >
             {recipe.title}
           </p>
