@@ -6,6 +6,7 @@ import { LinkButton } from "@/components/Button";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
 import { NutritionSource } from "@/components/NutritionSource";
+import { RecipeTopBar } from "@/components/RecipeTopBar";
 import { RetryImport } from "@/components/RetryImport";
 import { ShelfPicker } from "@/components/ShelfPicker";
 import { setServingsAction } from "@/app/actions";
@@ -111,9 +112,11 @@ export default async function RecipePage({
 
   return (
     <div className="min-h-full">
-      <main className="mx-auto max-w-2xl px-5 pb-32 pt-6">
-        <div className="flex items-center justify-between">
-          <BackButton href="/" label="Back to the box" />
+      {/* The top bar is `position: fixed` now (see RecipeTopBar), so `pt-24`
+          on <main> is the space it used to occupy in the flow. */}
+      <main className="mx-auto max-w-2xl px-5 pb-32 pt-24">
+        <RecipeTopBar>
+          <BackButton href="/" label="Back to the box" variant="plain" />
           {/* The two "where does this belong" controls, side by side. Shelves
               used to be a full labelled section under Start Cooking; it does
               the same job as the heart at a fraction of the frequency, so it
@@ -123,7 +126,11 @@ export default async function RecipePage({
               Server Action; it's a client component only so it can throw the
               emoji burst from the point of the tap. `recipe.is_favorite` is
               undefined until migration 0005 is applied; treat that as
-              not-favorited. */}
+              not-favorited.
+
+              Both are rendered here, on the server, and handed to the client
+              top bar as children — it only knows about scroll direction, so
+              it has no business fetching shelf membership. */}
           <div className="flex items-center gap-1">
             <ShelfPicker
               recipeId={recipe.id}
@@ -132,7 +139,7 @@ export default async function RecipePage({
             />
             <FavoriteButton recipeId={recipe.id} isFavorite={!!recipe.is_favorite} />
           </div>
-        </div>
+        </RecipeTopBar>
 
         {/* Everything below here is the recipe, so it takes the recipe's own
             direction and language. The chrome above keeps the app's. */}
