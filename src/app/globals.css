@@ -204,6 +204,123 @@ h3 {
   }
 }
 
+/* Favouriting a recipe: a burst of emoji out from under the thumb.
+   ---------------------------------------------------------------
+   Each particle is absolutely positioned at the centre of the heart button
+   and carries its own `--dx`/`--dy` (the direction it flies) and `--rot` as
+   inline custom properties, set in JS where the angles are computed. The
+   keyframes read those rather than hard-coding a fan, so one rule animates
+   however many particles the component decides to throw.
+
+   Custom properties are the reason this can be CSS at all. `translate()`
+   can't interpolate between two JS-chosen endpoints from a stylesheet, but
+   it can interpolate to `calc(var(--dx) * 1px)` — the variable is a constant
+   for the life of the particle, and the animation runs on the compositor
+   like any other transform. The alternative, stepping ~14 particles from a
+   rAF loop, is main-thread work during the exact moment the page is also
+   handling a form submit and a server revalidation.
+
+   The arc is two-stage on purpose: out fast and up (the pop), then the tail
+   drifts back down as it fades, so it reads as thrown rather than as a
+   radial wipe. The `+ 40px` on the vertical is gravity, applied only at the
+   end. */
+@keyframes emoji-burst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15) rotate(calc(var(--rot) * 0.3));
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%)
+      translate(calc(var(--dx) * 1px), calc(var(--dy) * 1px + 40px)) scale(0.7)
+      rotate(var(--rot));
+  }
+}
+
+/* `fixed`, not `absolute`, and the difference is not cosmetic.
+   ------------------------------------------------------------
+   The heart sits in the top-right corner, so half the burst flies past the
+   right edge of the screen. An absolutely positioned box that overflows to
+   the right extends the document's scrollable overflow — measured at 417
+   against a 375 viewport — which gave the whole page a second of sideways
+   scroll on every tap. Fixed-position boxes are excluded from the scrollable
+   overflow region, so the particles can leave the screen without the page
+   growing to accommodate them.
+
+   (The obvious alternative, `overflow-x: clip` on <html>, was tried first and
+   does not work: the computed value applies, and the document still scrolls
+   sideways to 42px. Root-element overflow propagates to the viewport, and
+   `clip` doesn't survive that trip in Chrome.)
+
+   The trade is that the burst is anchored to the screen rather than to the
+   button, so scrolling during the ~900ms it lasts would leave it behind. At
+   that duration it reads as a flourish over the page rather than as something
+   glued to the heart, so this is close to free. The component sets `left`/
+   `top` from the button's rect at the moment of the tap. */
+.emoji-burst-particle {
+  position: fixed;
+  /* The burst is decoration layered over a live control — it must never be
+     what receives the tap that was aimed at the heart. */
+  pointer-events: none;
+  /* Over the page and the bottom nav (z-20), under dialogs (z-50) and the
+     toast (z-60), which are things you're meant to read. */
+  z-index: 40;
+  will-change: transform, opacity;
+  animation: emoji-burst 900ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+}
+
+/* The toast's arrival. Up and in, which is the direction it came from
+   (below the fold, near the nav) rather than a generic fade. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.toast-in {
+  animation: toast-in 220ms ease-out;
+}
+
+/* Both of these are pure confirmation-of-a-thing-that-already-happened, so
+   under reduced motion they simply appear. The toast still says what it says
+   and the particles still show and fade — removing them entirely would take
+   away the feedback, not just the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .toast-in {
+    animation: none;
+  }
+
+  .emoji-burst-particle {
+    animation: emoji-burst-fade 900ms ease-out forwards;
+  }
+}
+
+@keyframes emoji-burst-fade {
+  0%,
+  60% {
+    opacity: 1;
+    transform: translate(-50%, -50%)
+      translate(calc(var(--dx) * 0.6px), calc(var(--dy) * 0.6px));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%)
+      translate(calc(var(--dx) * 0.6px), calc(var(--dy) * 0.6px));
+  }
+}
+
 /* The home strip's cards, dealt rather than scrolled off.
    ------------------------------------------------------
    The cards overlap by a sliver, so the strip reads as a stack rather than a

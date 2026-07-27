@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 import { BackButton } from "@/components/BackButton";
 import { BottomNav } from "@/components/BottomNav";
-import { HeartIcon } from "@/components/HeartIcon";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { LinkButton } from "@/components/Button";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
 import { NutritionSource } from "@/components/NutritionSource";
 import { RetryImport } from "@/components/RetryImport";
 import { ShelfPicker } from "@/components/ShelfPicker";
-import { setServingsAction, toggleFavoriteAction } from "@/app/actions";
+import { setServingsAction } from "@/app/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
 import { dirFor, recipeLang } from "@/lib/lang";
 import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
@@ -119,27 +119,18 @@ export default async function RecipePage({
               the same job as the heart at a fraction of the frequency, so it
               sits next to it instead of taking a slab of the page.
 
-              The favorite toggle is a plain-submit form, no client JS.
-              `recipe.is_favorite` is undefined until migration 0005 is
-              applied; treat that as not-favorited. */}
+              The favorite toggle still submits a plain form to the same
+              Server Action; it's a client component only so it can throw the
+              emoji burst from the point of the tap. `recipe.is_favorite` is
+              undefined until migration 0005 is applied; treat that as
+              not-favorited. */}
           <div className="flex items-center gap-1">
             <ShelfPicker
               recipeId={recipe.id}
               shelves={cols}
               memberIds={[...memberIds]}
             />
-            <form action={toggleFavoriteAction}>
-              <input type="hidden" name="recipe_id" value={recipe.id} />
-              <input type="hidden" name="is_favorite" value={String(!!recipe.is_favorite)} />
-              <button
-                type="submit"
-                aria-label={recipe.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                aria-pressed={!!recipe.is_favorite}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition active:scale-90"
-              >
-                <HeartIcon filled={!!recipe.is_favorite} />
-              </button>
-            </form>
+            <FavoriteButton recipeId={recipe.id} isFavorite={!!recipe.is_favorite} />
           </div>
         </div>
 
@@ -188,12 +179,18 @@ export default async function RecipePage({
           // loudest thing on the page — louder than the title and than the
           // ingredients you actually came to read. It's a doorway to another
           // screen, not the point of this one, so it's now an inline-sized
-          // secondary-weight pill that centres under the meta row. The emoji
-          // went with it; it was doing decoration, not meaning.
+          // pill that centres under the meta row. The emoji went with it; it
+          // was doing decoration, not meaning.
+          //
+          // Quiet, but not *grey*. The first pass at that used `secondary`,
+          // which is Figma's inactive state — grey text on grey fill, which is
+          // also exactly what a disabled control looks like, so the button
+          // read as switched off. `soft` keeps the drop in hierarchy (the size
+          // is doing most of that work anyway) while staying visibly pressable.
           <div className="mt-5 flex justify-center">
             <LinkButton
               href={`/recipe/${recipe.id}/cook`}
-              variant="secondary"
+              variant="soft"
               className="px-5 py-2.5 text-sm"
             >
               {t.startCooking}

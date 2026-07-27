@@ -6,6 +6,7 @@ import {
   createCollectionAction,
   toggleRecipeInCollectionAction,
 } from "@/app/collections/actions";
+import { shelvedLine, showToast } from "@/lib/toast";
 
 // "Put this on a shelf", as an icon in the recipe's top bar next to the
 // favorite heart.
@@ -141,8 +142,12 @@ export function ShelfPicker({
                 aria-label="New shelf name"
                 className="min-w-0 flex-1 rounded-full bg-background px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
               />
+              {/* Creating a shelf from here also files the recipe onto it
+                  (see createCollectionAction), so it earns the same line as
+                  ticking an existing shelf. */}
               <button
                 type="submit"
+                onClick={() => showToast(shelvedLine(), "🗂️")}
                 className="shrink-0 rounded-full bg-accent px-4 py-2.5 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
               >
                 Create
@@ -161,6 +166,13 @@ function ShelfRow({ name, isMember }: { name: string; isMember: boolean }) {
     <button
       type="submit"
       disabled={pending}
+      // Only on the way *in*. Taking a recipe off a shelf isn't organizing,
+      // and being congratulated for it would be the app not paying attention.
+      // Fresh copy each time — see `shelvedLine` in lib/toast.ts for why it
+      // rotates rather than repeating one good line into the ground.
+      onClick={() => {
+        if (!isMember) showToast(shelvedLine(), "🗂️");
+      }}
       aria-pressed={isMember}
       className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-[15px] transition active:scale-[0.98] disabled:opacity-60 ${
         isMember ? "bg-accent/20 font-semibold" : "bg-background"

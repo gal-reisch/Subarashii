@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
+import { useHomeStrip } from "@/components/useHomeStrip";
 import { dirFor } from "@/lib/lang";
 import { CATEGORY_STYLES } from "@/lib/categoryColor";
 import {
@@ -53,6 +54,12 @@ export function RecipeBrowser({ recipes }: { recipes: CardRecipe[] }) {
   }, [recipes, query, category, categories]);
 
   const filtersActive = query.trim() !== "" || category !== null;
+
+  // Restores the strip's offset on return from a recipe, and lets a flick
+  // carry further than the one card mandatory snapping allows. Only remembers
+  // the position when the unfiltered list is showing — see the note on the
+  // hook's `remember` parameter.
+  const stripRef = useHomeStrip(!filtersActive);
 
   return (
     <div>
@@ -128,7 +135,10 @@ export function RecipeBrowser({ recipes }: { recipes: CardRecipe[] }) {
         // clip edge is a hard horizontal line and a card sliced by it stops
         // looking like a card. `-mb-32` gives most of that space back to the
         // layout, since nothing is ever *laid out* down there.
-        <div className="-mx-5 -mb-32 mt-3 flex snap-x snap-mandatory scroll-pl-5 overflow-x-auto overflow-y-hidden px-5 pb-40 pt-1 [scrollbar-width:none] [&>*+*]:-ml-7 [&::-webkit-scrollbar]:hidden">
+        <div
+          ref={stripRef}
+          className="-mx-5 -mb-32 mt-3 flex snap-x snap-mandatory scroll-pl-5 overflow-x-auto overflow-y-hidden px-5 pb-40 pt-1 [scrollbar-width:none] [&>*+*]:-ml-7 [&::-webkit-scrollbar]:hidden"
+        >
           {filtered.map((r, i) => (
             // Three nested elements, each doing exactly one job.
             //

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito, Poppins, Geist_Mono } from "next/font/google";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { Toaster } from "@/components/Toaster";
 import "./globals.css";
 
 // Nunito carries body copy — it's a rounded, friendly sans. Headlines,
@@ -66,6 +67,10 @@ export default function RootLayout({
     >
       <body className="min-h-full">
         {children}
+        {/* Mounted once, at the root, because a toast raised on the recipe
+            page has to outlive the navigation that a Server Action's
+            revalidation can trigger underneath it. */}
+        <Toaster />
         <ServiceWorkerRegister />
       </body>
     </html>

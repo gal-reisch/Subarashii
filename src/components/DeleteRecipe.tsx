@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { createPortal, useFormStatus } from "react-dom";
 import { deleteRecipeAction, type DeleteRecipeState } from "@/app/actions";
 import { dirFor, type Lang } from "@/lib/lang";
 import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
@@ -104,59 +104,97 @@ export function DeleteRecipe({
         </button>
       )}
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t.deleteRecipe}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/35 px-5 pb-8 backdrop-blur-[2px] sm:items-center sm:pb-0"
-          onClick={() => setLine(null)}
-        >
+      {/* Portalled to <body>, which is not cosmetic — it's the only thing that
+          makes `fixed inset-0` mean the viewport here.
+
+          The icon variant of this button lives on a home-page card, and those
+          cards sit inside the `.card-enter`/`.card-drop` wrappers that carry
+          the deal-and-drop scroll animation. An element with a transform (or
+          an animation that *might* produce one — the property being animated
+          is enough, running or filling) becomes the containing block for any
+          `position: fixed` descendant. So the dialog was being laid out
+          against a 240px-wide card instead of the screen: the backdrop covered
+          the card, the sheet overflowed the top of it, and `flex-1` on two
+          buttons in a 240px box left them narrow enough that `rounded-full`
+          made them circles rather than pills.
+
+          Rendering into <body> puts it back outside every transformed
+          ancestor. `open` is only ever true after a click, so this never runs
+          during the server render and `document` is always there. */}
+      {open &&
+        createPortal(
           <div
-            // Stops a click inside the sheet from reaching the backdrop's
-            // dismiss handler.
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm rounded-[28px] bg-card p-6 shadow-[0px_24px_60px_rgba(0,0,0,0.25)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={t.deleteRecipe}
+            className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/35 px-5 py-8 backdrop-blur-[2px]"
+            onClick={() => setLine(null)}
           >
-            <h2 className="text-xl leading-snug">{line}</h2>
-            {/* The title is recipe content, so it keeps its own direction
-                even inside a dialog that has already taken the recipe's. The
-                conjunction lives in the blurb string rather than in the JSX:
-                Hebrew attaches it to the following word (״וכל מה שבתוכו״) and
-                has no separate token to sit here. */}
-            <p className="mt-2 text-sm text-muted">
-              <span dir={dirFor(title)} className="font-semibold text-foreground">
-                {title}
-              </span>{" "}
-              {t.deleteBlurb}
-            </p>
-
-            {state.message && (
-              <p
-                role="alert"
-                className="mt-4 rounded-2xl bg-warn-bg px-4 py-3 text-sm font-semibold text-warn-text"
-              >
-                {state.message}
+            <div
+              // Stops a click inside the sheet from reaching the backdrop's
+              // dismiss handler.
+              onClick={(e) => e.stopPropagation()}
+              // Positioned with auto margins rather than `items-end
+              // sm:items-center`, which do the same job but fail the same way
+              // the containing-block bug did: an `align-items` value pins the
+              // sheet to one edge, and if it's ever taller than the viewport
+              // the other edge overflows *above* the scroll origin, where it
+              // can't be scrolled to. Auto margins collapse to zero when
+              // there's no free space, so the sheet just starts at the top and
+              // the `overflow-y-auto` above reaches the rest.
+              className="mt-auto w-full max-w-sm rounded-[28px] bg-card p-5 shadow-[0px_24px_60px_rgba(0,0,0,0.25)] sm:my-auto"
+            >
+              <h2 className="text-lg leading-snug">{line}</h2>
+              {/* The title is recipe content, so it keeps its own direction
+                  even inside a dialog that has already taken the recipe's. The
+                  conjunction lives in the blurb string rather than in the JSX:
+                  Hebrew attaches it to the following word (״וכל מה שבתוכו״) and
+                  has no separate token to sit here. */}
+              <p className="mt-2 text-sm text-muted">
+                <span dir={dirFor(title)} className="font-semibold text-foreground">
+                  {title}
+                </span>{" "}
+                {t.deleteBlurb}
               </p>
-            )}
 
-            <div className="mt-6 flex gap-2">
-              <button
-                ref={cancelRef}
-                type="button"
-                onClick={() => setLine(null)}
-                className="flex-1 rounded-full bg-button-inactive-bg px-4 py-3 font-heading font-semibold text-foreground transition active:scale-[0.98]"
-              >
-                {t.keepIt}
-              </button>
-              <form action={formAction} className="flex-1">
-                <input type="hidden" name="recipe_id" value={recipeId} />
-                <ConfirmButton t={t} />
-              </form>
+              {state.message && (
+                <p
+                  role="alert"
+                  className="mt-3 rounded-2xl bg-warn-bg px-4 py-2.5 text-sm font-semibold text-warn-text"
+                >
+                  {state.message}
+                </p>
+              )}
+
+              {/* Both halves are a `min-w-0 flex-1` wrapper around a `w-full`
+                  button, and the symmetry is load-bearing rather than tidiness.
+                  Putting `flex-1` on the bare <button> and on the <form> looks
+                  equivalent but isn't: `flex-basis: 0` is a *border-box* length
+                  here, so it can't resolve below the element's own padding. The
+                  padded button's hypothetical size was 32px (its px-4) while the
+                  form's was 0, and the free space split on top of that — leaving
+                  the pair 160/128 instead of even. `min-w-0` is separate, and
+                  stops a long Hebrew label from setting a floor of its own. */}
+              <div className="mt-5 flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <button
+                    ref={cancelRef}
+                    type="button"
+                    onClick={() => setLine(null)}
+                    className="w-full rounded-full bg-button-inactive-bg px-4 py-2.5 font-heading text-[15px] font-semibold text-foreground transition active:scale-[0.98]"
+                  >
+                    {t.keepIt}
+                  </button>
+                </div>
+                <form action={formAction} className="min-w-0 flex-1">
+                  <input type="hidden" name="recipe_id" value={recipeId} />
+                  <ConfirmButton t={t} />
+                </form>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
@@ -167,7 +205,11 @@ function ConfirmButton({ t }: { t: RecipeStrings }) {
     <button
       type="submit"
       disabled={pending}
-      className="w-full rounded-full bg-warn-text px-4 py-3 font-heading font-semibold text-white transition active:scale-[0.98] disabled:opacity-60"
+      // The app's pink, not a warning colour. Consistent with the rest of the
+      // UI, and consistent with the tone of the copy above it — the dialog is
+      // deliberately light about this (see the note at the top of the file),
+      // so a brown-red "danger" button was arguing with its own wording.
+      className="w-full rounded-full bg-accent px-4 py-2.5 font-heading text-[15px] font-semibold text-accent-ink shadow-[0px_10px_24px_rgba(244,166,210,0.5)] transition active:scale-[0.98] disabled:opacity-60"
     >
       {pending ? t.deleting : t.confirmDelete}
     </button>
