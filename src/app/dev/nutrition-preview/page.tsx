@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { NutritionChips } from "@/components/NutritionChips";
+import { recipeStrings } from "@/lib/recipeStrings";
 
 // DEV-ONLY visual QA harness for NutritionChips (task #20). Real recipe pages
 // never fabricate nutrition numbers — this route exists purely so the chip
@@ -8,6 +9,9 @@ import { NutritionChips } from "@/components/NutritionChips";
 // development, same pattern as /api/dev-login.
 export default function NutritionPreviewPage() {
   if (process.env.NODE_ENV !== "development") notFound();
+
+  const en = recipeStrings("en");
+  const he = recipeStrings("he");
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
@@ -26,7 +30,29 @@ export default function NutritionPreviewPage() {
           perServing: true,
         }}
         servings={4}
+        strings={en}
       />
+
+      {/* The same panel in a Hebrew recipe's direction — the case the strings
+          refactor exists for. Worth having next to the English one: the thing
+          most likely to go wrong is the stat grid's numbers, which must stay
+          "32g" and not "g32" while the block itself hangs off the right. */}
+      <div dir="rtl" className="mt-10 border-t border-border pt-6">
+        <NutritionChips
+          totals={{
+            calories: 420,
+            protein_g: 28,
+            carbs_g: 35,
+            fat_g: 22,
+            fiber_g: 6,
+            sugar_g: 18,
+            isEstimated: true,
+            perServing: true,
+          }}
+          servings={4}
+          strings={he}
+        />
+      </div>
 
       <div className="mt-10 border-t border-border pt-6">
         <p className="text-sm text-muted">No flags triggered (below thresholds):</p>
@@ -42,6 +68,7 @@ export default function NutritionPreviewPage() {
             perServing: true,
           }}
           servings={2}
+          strings={en}
         />
       </div>
 
@@ -62,6 +89,7 @@ export default function NutritionPreviewPage() {
             perServing: false,
           }}
           servings={null}
+          strings={en}
         />
       </div>
     </div>

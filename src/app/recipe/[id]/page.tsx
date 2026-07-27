@@ -5,11 +5,13 @@ import { HeartIcon } from "@/components/HeartIcon";
 import { LinkButton } from "@/components/Button";
 import { DeleteRecipe } from "@/components/DeleteRecipe";
 import { NutritionChips } from "@/components/NutritionChips";
+import { NutritionSource } from "@/components/NutritionSource";
 import { RetryImport } from "@/components/RetryImport";
 import { ShelfPicker } from "@/components/ShelfPicker";
 import { setServingsAction, toggleFavoriteAction } from "@/app/actions";
 import { normalizeImageUrl } from "@/lib/imageUrl";
-import { dirFor } from "@/lib/lang";
+import { dirFor, recipeLang } from "@/lib/lang";
+import { recipeStrings, type RecipeStrings } from "@/lib/recipeStrings";
 import { computeNutritionTotals } from "@/lib/nutritionCalc";
 import { mergeUnclosedParens } from "@/lib/parser/mergeSteps";
 import { classifyStepKind } from "@/lib/parser/stepKind";
@@ -25,6 +27,10 @@ interface Ingredient {
   fiber_g: number | null;
   sugar_g: number | null;
   is_estimated: boolean;
+  /** Which table answered for this row — read only by the "where do these
+   *  numbers come from" dialog, which is the whole reason it's selected. */
+  fdc_source: string | null;
+  grams_resolved: number | null;
 }
 
 interface Step {
@@ -53,7 +59,9 @@ export default async function RecipePage({
     await Promise.all([
       supabase
         .from("ingredient")
-        .select("id,raw_text,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,is_estimated")
+        .select(
+          "id,raw_text,calories,protein_g,carbs_g,fat_g,fiber_g,sugar_g,is_estimated,fdc_source,grams_resolved",
+        )
         .eq("recipe_id", id)
         .order("position"),
       supabase
@@ -71,13 +79,32 @@ export default async function RecipePage({
   const memberIds = new Set((memberships ?? []).map((m) => m.collection_id));
   const nutritionTotals = computeNutritionTotals(ings, recipe.servings);
 
-  // NOTE: deliberately no container-level `dir` here. An earlier pass set
-  // dir on <main> for Hebrew recipes, which mirrored the entire layout —
-  // headings, back button, flex order. The app's UI is English and stays
-  // LTR no matter what language a recipe is in; only the recipe's own text
-  // flows RTL, via the per-line `dirFor` calls below. Layout LTR, text
-  // per-line — that rule holds across the whole app.
+  // The recipe body — everything from the cover image down — is presented in
+  // the recipe's own language and direction. The page's chrome above it (back
+  // button, shelf picker, favourite toggle) and the bottom nav stay English
+  // and LTR.
   //
+  // This narrows the earlier rule rather than abandoning it. That rule ("no
+  // container-level dir; only per-line dirFor") existed because an even
+  // earlier pass had put `dir` on <main> and mirrored the back button and nav
+  // along with it. But swinging fully the other way left the frame fighting
+  // its contents: "Ingredients" and "Steps" sat hard left above perfectly
+  // right-aligned Hebrew, and the "6 servings · 720 min · Source" meta row
+  // ran the opposite way from the title directly above it. Half-mirrored read
+  // as broken rather than as neutral.
+  //
+  // So the boundary is now content vs. chrome instead of recipe-text vs.
+  // everything. Per-line `dirFor` stays exactly where it was — it's what
+  // handles a Latin ingredient inside a Hebrew list, which the container
+  // direction can't.
+  const lang = recipeLang(recipe.primary_language, [
+    recipe.title,
+    ...ings.map((i) => i.raw_text),
+    ...stps.map((s) => s.text),
+  ]);
+  const t = recipeStrings(lang);
+  const bodyDir = lang === "he" ? "rtl" : "ltr";
+
   // See lib/imageUrl.ts — unwraps a stored Google-Images result link so an
   // already-saved recipe stops rendering a broken-image icon.
   const coverImageUrl = normalizeImageUrl(recipe.cover_image_url);
@@ -116,6 +143,9 @@ export default async function RecipePage({
           </div>
         </div>
 
+        {/* Everything below here is the recipe, so it takes the recipe's own
+            direction and language. The chrome above keeps the app's. */}
+        <div dir={bodyDir}>
         {coverImageUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -133,11 +163,13 @@ export default async function RecipePage({
         </h1>
 
         <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm font-semibold text-muted">
-          {recipe.servings && <span>{recipe.servings} servings</span>}
+          {recipe.servings && <span>{t.servings(recipe.servings)}</span>}
           {recipe.total_time_min && (
-            <span className="font-mono text-accent">{recipe.total_time_min} min</span>
+            <span className="font-mono text-accent">{t.minutes(recipe.total_time_min)}</span>
           )}
-          {recipe.cuisine && <span>{recipe.cuisine}</span>}
+          {/* Cuisine is free text off the source, so it carries whatever
+              language it was written in rather than the body's. */}
+          {recipe.cuisine && <span dir={dirFor(recipe.cuisine)}>{recipe.cuisine}</span>}
           {recipe.source_url && (
             <a
               href={recipe.source_url}
@@ -145,24 +177,33 @@ export default async function RecipePage({
               rel="noreferrer"
               className="text-accent hover:underline"
             >
-              Source ↗
+              {t.source}
             </a>
           )}
         </div>
 
         {(ings.length > 0 || stps.length > 0) && (
-          <LinkButton
-            href={`/recipe/${recipe.id}/cook`}
-            className="mt-6 flex w-full items-center justify-center gap-2 py-4 text-lg"
-          >
-            👩‍🍳 Start Cooking
-          </LinkButton>
+          // Dropped a level in the hierarchy: this used to be a full-width
+          // py-4 text-lg primary pill with a chef emoji, which made it the
+          // loudest thing on the page — louder than the title and than the
+          // ingredients you actually came to read. It's a doorway to another
+          // screen, not the point of this one, so it's now an inline-sized
+          // secondary-weight pill that centres under the meta row. The emoji
+          // went with it; it was doing decoration, not meaning.
+          <div className="mt-5 flex justify-center">
+            <LinkButton
+              href={`/recipe/${recipe.id}/cook`}
+              variant="secondary"
+              className="px-5 py-2.5 text-sm"
+            >
+              {t.startCooking}
+            </LinkButton>
+          </div>
         )}
 
         {recipe.needs_review && (
           <div className="mt-4 rounded-2xl bg-warn-bg p-3 text-sm text-warn-text">
-            We couldn&apos;t fully read this one. The link is saved — you can add
-            the details yourself.
+            {t.needsReview}
             {/* Instagram in particular fails intermittently, so the same link
                 read a second time very often works. Only offered when there's
                 a URL to re-read. */}
@@ -172,7 +213,7 @@ export default async function RecipePage({
 
         {ings.length > 0 && (
           <section className="mt-8">
-            <h2 className="text-[15px] font-bold">Ingredients</h2>
+            <h2 className="text-[15px] font-bold">{t.ingredients}</h2>
             <ul className="mt-3 space-y-2">
               {ings.map((ing) => (
                 <li
@@ -191,8 +232,19 @@ export default async function RecipePage({
           <NutritionChips
             totals={nutritionTotals}
             servings={recipe.servings}
+            strings={t}
             servingsControl={
-              <ServingsControl recipeId={recipe.id} servings={recipe.servings} />
+              <ServingsControl recipeId={recipe.id} servings={recipe.servings} strings={t} />
+            }
+            estimatedChip={
+              <NutritionSource
+                rows={ings}
+                // Passed only when the totals really are per-serving, so the
+                // dialog's "divided by N" line can't claim a division that
+                // computeNutritionTotals didn't do.
+                servings={nutritionTotals.perServing ? recipe.servings : null}
+                lang={lang}
+              />
             }
           />
         )}
@@ -232,7 +284,7 @@ export default async function RecipePage({
 
           return (
             <section className="mt-8">
-              <h2 className="text-[15px] font-bold">Steps</h2>
+              <h2 className="text-[15px] font-bold">{t.steps}</h2>
 
               {instructions.length > 0 && (
                 <ol className="mt-3 space-y-3">
@@ -288,8 +340,7 @@ export default async function RecipePage({
               {ignored.length > 0 && (
                 <details className="mt-4 text-sm text-muted">
                   <summary className="cursor-pointer select-none font-semibold">
-                    Show {ignored.length} more line{ignored.length === 1 ? "" : "s"}{" "}
-                    from the original source
+                    {t.showMore(ignored.length)}
                   </summary>
                   <ul className="mt-2 space-y-2">
                     {ignored.map((step) => (
@@ -313,8 +364,14 @@ export default async function RecipePage({
             action belongs. The home-page card carries the same action as a
             small ×; both open the same confirm dialog. */}
         <section className="mt-12">
-          <DeleteRecipe recipeId={recipe.id} title={recipe.title} variant="full" />
+          <DeleteRecipe
+            recipeId={recipe.id}
+            title={recipe.title}
+            variant="full"
+            lang={lang}
+          />
         </section>
+        </div>
       </main>
       <BottomNav />
     </div>
@@ -332,9 +389,11 @@ export default async function RecipePage({
 function ServingsControl({
   recipeId,
   servings,
+  strings,
 }: {
   recipeId: string;
   servings: number | null;
+  strings: RecipeStrings;
 }) {
   const unknown = servings == null;
 
@@ -347,9 +406,7 @@ function ServingsControl({
     >
       <input type="hidden" name="recipe_id" value={recipeId} />
       <label htmlFor="servings" className="font-semibold">
-        {unknown
-          ? "This one never said how many it feeds. How many?"
-          : "Serves"}
+        {unknown ? strings.servingsUnknown : strings.serves}
       </label>
       <input
         id="servings"
@@ -365,7 +422,7 @@ function ServingsControl({
         type="submit"
         className="rounded-full bg-accent px-3 py-1 font-heading text-sm font-semibold text-accent-ink transition active:scale-95"
       >
-        {unknown ? "Split it up" : "Update"}
+        {unknown ? strings.setServings : strings.updateServings}
       </button>
     </form>
   );

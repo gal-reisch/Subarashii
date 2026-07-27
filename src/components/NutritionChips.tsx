@@ -28,12 +28,15 @@
 // classification instead of re-deriving it — see RecipeBrowser.tsx.
 
 import { NUTRIENT_DEFS, getNutritionFlags, type NutritionTotals } from "@/lib/nutritionCalc";
+import type { RecipeStrings } from "@/lib/recipeStrings";
 export type { NutritionTotals };
 
 export function NutritionChips({
   totals,
   servings,
   servingsControl,
+  strings,
+  estimatedChip,
 }: {
   totals: NutritionTotals;
   /** The recipe's declared serving count, or null when it never stated one. */
@@ -42,6 +45,15 @@ export function NutritionChips({
    *  the recipe page. Passed in rather than imported so this component stays
    *  presentational and reusable. */
   servingsControl?: React.ReactNode;
+  /** Section labels in the recipe's own language. The nutrient names and flag
+   *  pills are looked up through this rather than read off NUTRIENT_DEFS,
+   *  because NUTRIENT_DEFS is shared with the home cards — which stay English
+   *  even for a Hebrew recipe (see the RTL card note in RecipeBrowser). */
+  strings: RecipeStrings;
+  /** The clickable "Estimated" chip, passed in because it's a client
+   *  component with its own dialog and this file is presentational. Only
+   *  supplied when the totals are actually estimated. */
+  estimatedChip?: React.ReactNode;
 }) {
   const present = NUTRIENT_DEFS.filter((n) => totals[n.key] != null);
   if (present.length === 0) return null;
@@ -52,20 +64,16 @@ export function NutritionChips({
   return (
     <section className="mt-8">
       <div className="flex items-center gap-2">
-        <h2 className="text-[15px] font-bold">Nutrition</h2>
+        <h2 className="text-[15px] font-bold">{strings.nutrition}</h2>
         {/* This label used to read "per serving" unconditionally, including
             for recipes that never recorded a serving count — in which case
             computeNutritionTotals returns whole-recipe totals and the header
             was flatly lying. A tray of meatballs was being presented as a
             2,104 kcal portion. Say which of the two the numbers actually are. */}
         <span className="text-xs font-semibold text-muted">
-          {totals.perServing ? `per serving · makes ${servings}` : "whole recipe"}
+          {totals.perServing ? strings.perServing(servings) : strings.wholeRecipe}
         </span>
-        {totals.isEstimated && (
-          <span className="ml-auto rounded-full bg-warn-bg px-2 py-0.5 text-[10px] font-bold text-warn-text">
-            Estimated
-          </span>
-        )}
+        {totals.isEstimated && estimatedChip}
       </div>
 
       {servingsControl}
@@ -79,7 +87,7 @@ export function NutritionChips({
               key={n.key}
               className="flag-glow rounded-full bg-gradient-to-br from-accent to-accent-soft px-3.5 py-1.5 font-heading text-sm font-semibold text-accent-ink"
             >
-              {n.flagLabel}
+              {strings.flags[n.flagLabel!] ?? n.flagLabel}
             </span>
           ))}
         </div>
@@ -92,11 +100,19 @@ export function NutritionChips({
             className="rounded-2xl border border-accent px-3 py-3 text-accent-deep"
           >
             <div className="text-[11px] font-semibold uppercase tracking-wide opacity-70">
-              {n.label}
+              {strings.nutrients[n.key] ?? n.label}
             </div>
             <div className="mt-1 font-mono text-2xl font-extrabold leading-none">
-              {Math.round(totals[n.key] as number)}
-              <span className="ml-0.5 text-sm font-bold">{n.unit}</span>
+              {/* `dir` goes on an inline-block wrapper rather than on the row,
+                  so the value/unit pair keeps its internal LTR order ("32g",
+                  never "g32") while the block as a whole still hangs off
+                  whichever edge the section reads from. Putting dir on the
+                  row instead would left-align the number under a
+                  right-aligned label. */}
+              <span dir="ltr" className="inline-block">
+                {Math.round(totals[n.key] as number)}
+                <span className="ml-0.5 text-sm font-bold">{n.unit}</span>
+              </span>
             </div>
           </div>
         ))}
