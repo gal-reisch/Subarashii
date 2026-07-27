@@ -9,6 +9,10 @@ export interface JsonLdRecipe {
   totalTimeMin: number | null;
   cuisine: string | null;
   author: string | null;
+  /** schema.org `publisher` — the outlet, not a person. Kept separate from
+   *  `author` so the caller can prefer a named cook and fall back to the
+   *  publication, rather than having the two blur together here. */
+  publisher: string | null;
   ingredients: string[];
   steps: string[];
 }
@@ -43,6 +47,9 @@ function collectNodes(data: unknown, out: Json[]): void {
 // The first entry wins on an array. Multi-author recipes exist, but the card
 // has one line for this and "Alice Smith and 3 others" is worse than "Alice
 // Smith" — the detail page links to the source for anyone who cares.
+//
+// `publisher` has the identical shape in schema.org (string, or an
+// Organization with a `name`), so it goes through this same reader.
 const MAX_AUTHOR_LEN = 60;
 
 function parseAuthor(author: unknown): string | null {
@@ -185,6 +192,7 @@ export function extractRecipeFromHtml(html: string): JsonLdRecipe | null {
     totalTimeMin: totalTime,
     cuisine,
     author: parseAuthor(recipe.author),
+    publisher: parseAuthor(recipe.publisher),
     ingredients: parseIngredients(recipe.recipeIngredient ?? recipe.ingredients),
     steps: parseInstructions(recipe.recipeInstructions),
   };

@@ -6,6 +6,7 @@ import { extractArticleText } from "./articleText";
 import { extractSocialCaption } from "./caption";
 import { extractRecipeFromHtml, type JsonLdRecipe } from "./jsonld";
 import { extractRecipeFromText, type LlmRecipe } from "./llm";
+import { deriveSourceName, siteNameFromUrl } from "./sourceName";
 import { classifyStepKind } from "./stepKind";
 import { splitFreeText } from "./text";
 import { cleanTitle, pickTitle } from "./title";
@@ -55,7 +56,11 @@ function majorityLang(texts: string[]): Lang | null {
   return he >= en && he > 0 ? "he" : "en";
 }
 
-function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
+function fromJsonLd(
+  jr: JsonLdRecipe,
+  url: string | null,
+  meta: PageMeta,
+): ParsedRecipe {
   const ingredients = jr.ingredients.map((raw_text) => ({
     raw_text,
     language: detectLang(raw_text),
@@ -76,7 +81,13 @@ function fromJsonLd(jr: JsonLdRecipe, url: string | null): ParsedRecipe {
     servings: jr.servings,
     total_time_min: jr.totalTimeMin,
     cuisine: jr.cuisine,
-    author: jr.author,
+    // Most specific attribution first: a named cook, then the outlet the
+    // recipe's own markup declares, then whatever the page/URL says about
+    // itself. A blank line is the last resort, not the default.
+    author:
+      jr.author ??
+      jr.publisher ??
+      deriveSourceName({ siteName: meta.siteName, ogTitle: meta.ogTitle, url }),
     primary_language: majorityLang([
       ...ingredients.map((i) => i.raw_text),
       ...steps.map((s) => s.text),
@@ -94,10 +105,14 @@ interface PageMeta {
   ogTitle: string | undefined;
   descriptions: (string | undefined)[];
   image: string | null;
+  /** The publication's own name for itself, when it declares one. The most
+   *  reliable attribution a blog offers — see parser/sourceName.ts. */
+  siteName: string | undefined;
 }
 
 function readMeta($: cheerio.CheerioAPI): PageMeta {
   return {
+    siteName: $('meta[property="og:site_name"]').attr("content"),
     ogTitle: $('meta[property="og:title"]').attr("content"),
     descriptions: [
       $('meta[property="og:description"]').attr("content"),
@@ -144,7 +159,15 @@ async function ogFallback($: cheerio.CheerioAPI, url: string): Promise<ParsedRec
     servings: null,
     total_time_min: null,
     cuisine: null,
-    author: null,
+    // Provenance, before the model has said anything. If the caption names an
+    // actual cook the LLM's answer replaces this in `applyLlmRecipe`; if it
+    // doesn't — which is most of the time — the account or the site stands as
+    // the attribution instead of leaving the line blank.
+    author: deriveSourceName({
+      siteName: meta.siteName,
+      ogTitle: meta.ogTitle,
+      url,
+    }),
     primary_language: null,
     ingredients: [],
     steps: [],
@@ -323,9 +346,13 @@ export async function parseFromUrl(url: string): Promise<ParsedRecipe> {
 
     if (!html) return stub(url);
 
+    // Parsed once and shared: the JSON-LD path now needs the page's own
+    // metadata too, to fall back to the site/account name when the markup
+    // names no author.
+    const $ = cheerio.load(html);
     const jr = extractRecipeFromHtml(html);
-    if (jr && jr.ingredients.length > 0) return fromJsonLd(jr, url);
-    return await ogFallback(cheerio.load(html), url);
+    if (jr && jr.ingredients.length > 0) return fromJsonLd(jr, url, readMeta($));
+    return await ogFallback($, url);
   } catch {
     return stub(url);
   }
@@ -354,7 +381,11 @@ function stub(url: string): ParsedRecipe {
     servings: null,
     total_time_min: null,
     cuisine: null,
-    author: null,
+    // The fetch failed, so there is no metadata to read — but the URL itself
+    // still names the publication, and "Seriouseats" under the title is more
+    // use than a blank line on a card the user has to review anyway. Social
+    // hosts return null here (the account lives in metadata we never got).
+    author: siteNameFromUrl(url),
     primary_language: null,
     ingredients: [],
     steps: [],

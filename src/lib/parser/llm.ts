@@ -1,4 +1,5 @@
 import { generateJson, isGeminiConfigured, type GeminiPart } from "../gemini";
+import { isPlatformName } from "./sourceName";
 
 // LLM recipe extraction — turns unstructured input into the same
 // ingredients/steps shape the JSON-LD path produces.
@@ -48,7 +49,7 @@ Rules:
 - Do NOT invent anything. Omit "servings", "total_time_min", "cuisine" and "author" entirely unless the source actually states or clearly implies them. Never output a placeholder like 0 or "unknown".
 - Strip social-media chatter: hashtags, "follow for more", tagged accounts, like/comment counts, emoji-only lines. Keep genuine cooking notes as steps.
 - "title": the name of the dish that is ACTUALLY BEING MADE, in the source language. Work it out from the ingredients and steps — do not just copy the headline. Publishers pad headlines with editorial framing that says nothing about the food ("המדריך:", "מתכון:", "The Guide:", "Recipe:", "How to make", "You have to try this"), plus author handles, hashtags and clickbait. Strip all of it and keep only the dish. Example: a page headlined "המדריך: תבשיל אסאדו בבצלים וסילאן" is a recipe for "תבשיל אסאדו בבצלים וסילאן" — "המדריך" is not part of the dish name. If the headline names no dish at all, name the dish yourself from what is being cooked.
-- "author": who cooked or wrote this, if the source names them — a byline ("Yotam Ottolenghi"), a chef named in the text, or the social handle that posted it ("@sarahcooks"). Give the name as written, nothing else: no "by", no "recipe by", no title, no bio. Omit the field entirely if the source names nobody. Do NOT use the publication, website, blog or brand name — "Bon Appétit" and "Instagram" are not people.
+- "author": who this recipe came from. Prefer a person when the source names one — a byline ("Yotam Ottolenghi"), a chef named in the text, or the account that posted it ("@sarahcooks"). If no person is named, use the publication, blog or brand instead ("Bon Appétit"); naming the source is more useful than leaving it blank. Give the name as written, nothing else: no "by", no "recipe by", no title, no bio. Never answer with a bare platform name — "Instagram", "TikTok", "YouTube" and "Facebook" identify nobody, so omit the field rather than returning one of those. Omit it too when the source genuinely names no one.
 - "is_recipe": false if the source contains no actual recipe (just a photo caption, a login page, an ad). When false, leave the arrays empty.`;
 
 export interface LlmRecipe {
@@ -153,6 +154,11 @@ function cleanAuthor(v: unknown): string | null {
   // "unknown"/"n/a" is the model answering the field rather than omitting it,
   // which the prompt asks it not to do — treat them as the omission.
   if (/^(unknown|n\/?a|none|null)$/i.test(clean)) return null;
+  // Likewise "Instagram" — the prompt rules it out, but when the caption is a
+  // login wall the model reaches for it anyway. Dropping it here lets the
+  // caller's own fallback (the posting account, the site) supply something
+  // that actually identifies a source.
+  if (isPlatformName(clean)) return null;
   return clean;
 }
 
